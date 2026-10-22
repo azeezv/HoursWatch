@@ -1,0 +1,24 @@
+{
+  "private": true,
+  "name": "HoursWatch",
+  "description": "Adds a sidebar panel to the browser with a simple page.",
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "typescript": "7.0.2",
+    "extension": "^4.1.34"
+  },
+  "scripts": {
+    "dev": "extension dev",
+    "start": "extension start",
+    "build": "extension build",
+    "preview": "extension preview",
+    "build:chrome": "extension build --browser chrome",
+    "build:firefox": "extension build --browser firefox",
+    "build:edge": "extension build --browser edge"
+  },
+  "dependencies": {},
+  "packageManager": "npm@10.9.4"
+}
