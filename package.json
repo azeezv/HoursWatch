@@ -1,24 +1,23 @@
 {
   "private": true,
-  "name": "HoursWatch",
-  "description": "Adds a sidebar panel to the browser with a simple page.",
+  "name": "hourswatch",
+  "description": "Private website activity tracker with a 24-hour timeline (Chrome, Manifest V3).",
   "version": "1.0.0",
   "license": "MIT",
   "type": "module",
   "devDependencies": {
     "@types/chrome": "^0.0.287",
+    "extension": "^4.1.34",
     "typescript": "7.0.2",
-    "extension": "^4.1.34"
+    "vitest": "^3.2.7"
   },
   "scripts": {
-    "dev": "extension dev",
-    "start": "extension start",
-    "build": "extension build",
-    "preview": "extension preview",
-    "build:chrome": "extension build --browser chrome",
-    "build:firefox": "extension build --browser firefox",
-    "build:edge": "extension build --browser edge"
+    "dev": "extension dev --browser=chrome",
+    "build": "extension build --browser=chrome",
+    "preview": "extension preview --browser=chrome",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
   "packageManager": "npm@10.9.4"
 }
