@@ -9,6 +9,10 @@ import {chromeStore, KEYS} from '../storage/store'
 import {normalizeTracker} from '../storage/tracker-state'
 import {VisitRepo} from '../storage/visit-repo'
 
+// Tells the worker the popup is showing, so the focus change caused by opening
+// it is not mistaken for leaving the browser.
+chrome.runtime.connect({name: 'popup'})
+
 const store = chromeStore()
 const repo = new VisitRepo(store)
 const root = document.getElementById('root') as HTMLElement

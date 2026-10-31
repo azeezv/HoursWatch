@@ -10,6 +10,19 @@ const NONE: WorldSnapshot = {
   idleState: 'active'
 }
 
+/**
+ * Opening the toolbar popup moves focus out of the browser window (Chrome
+ * reports the window as unfocused). The popup announces itself over a port so
+ * that this does not end the visit it is about to display.
+ */
+let popupPorts = 0
+export function setPopupOpen(open: boolean) {
+  popupPorts = Math.max(0, popupPorts + (open ? 1 : -1))
+}
+
+/** The popup's page loads shortly after the focus change; give it time to connect. */
+const POPUP_GRACE_MS = 500
+
 /** Reads the real browser state. Throws if the APIs are unavailable. */
 export const chromeEnv: Env = {
   now: () => Date.now(),
@@ -29,7 +42,19 @@ export const chromeEnv: Env = {
     } catch {
       return NONE // no windows open (e.g. Chrome running in background)
     }
-    if (win.id === undefined || !win.focused || win.state === 'minimized') return NONE
+    if (win.state === 'minimized') return NONE
+    if (!win.focused && popupPorts === 0) {
+      await new Promise((r) => setTimeout(r, POPUP_GRACE_MS))
+      if (popupPorts === 0) {
+        try {
+          win = await chrome.windows.getLastFocused()
+        } catch {
+          return NONE
+        }
+        if (!win.focused) return NONE
+      }
+    }
+    if (win.id === undefined) return NONE
 
     const [tab] = await chrome.tabs.query({active: true, windowId: win.id})
     if (!tab || tab.id === undefined) return {...NONE, windowFocused: true, windowId: win.id}

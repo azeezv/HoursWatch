@@ -1,6 +1,6 @@
 import {normalizeSettings} from '../shared/settings'
 import {chromeStore, KEYS} from '../storage/store'
-import {chromeEnv} from './chrome-env'
+import {chromeEnv, setPopupOpen} from './chrome-env'
 import {TrackingEngine} from './engine'
 import type {Message, Reply} from './messages'
 
@@ -66,6 +66,16 @@ chrome.tabs.onUpdated.addListener((_id, change) => {
 })
 chrome.windows.onFocusChanged.addListener(() => sync('window-focus'))
 chrome.windows.onRemoved.addListener(() => sync('window-removed'))
+
+// The popup holds a port open while it is showing; see chrome-env.ts.
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.sender?.id !== chrome.runtime.id || port.name !== 'popup') return
+  setPopupOpen(true)
+  port.onDisconnect.addListener(() => {
+    setPopupOpen(false)
+    sync('popup-closed')
+  })
+})
 
 // The user came back (or went away/locked): idle -> active is what lets us
 // resume tracking immediately, since nothing else fires when you touch the mouse.
