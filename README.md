@@ -113,6 +113,11 @@ tests/          Vitest unit tests
 
 **Midnight and DST.** Visits are stored whole and split at **local** midnight when reporting/rendering. Days are computed with calendar arithmetic, so 23- and 25-hour DST days are correct; the timeline axis uses the day's real length.
 
+## Support and contributing
+
+- Report a bug or request a feature: [GitHub Issues](https://github.com/azeezv/HoursWatch/issues), or email [report@azeezv.me](mailto:report@azeezv.me).
+- Source code: https://github.com/azeezv/HoursWatch (MIT).
+
 ## Tests
 
 `npm test` runs 141 tests covering tab switching, window-focus changes (including focus loss with no event), idle and locked-screen handling, same/cross-domain navigation, ineligible pages, incognito, pause and exclusions, service-worker restart and gap recovery, browser restart, clock skew, midnight and DST boundaries, duration/stat calculations, storage persistence and migrations, colors, and CSV output.

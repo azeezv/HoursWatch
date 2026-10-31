@@ -220,5 +220,10 @@ export function openSettingsDialog(
           h('summary', {}, 'How your data is handled'),
           h('p', {class: 'help'}, 'Only the domain and the start, end and duration of each visit are saved — never URLs, titles, page content or incognito activity. Everything stays on this computer; nothing is sent anywhere.')),
         h('div', {class: 's-row'}, h('div', {class: 's-text'}, h('span', {class: 's-label'}, 'Delete all data')), danger)),
+      h('p', {class: 'about'},
+        `HoursWatch ${chrome.runtime.getManifest().version} · `,
+        h('a', {href: 'https://github.com/azeezv/HoursWatch', target: '_blank', rel: 'noopener noreferrer'}, 'Open source on GitHub'),
+        ' · ',
+        h('a', {href: 'mailto:report@azeezv.me?subject=HoursWatch%20feedback'}, 'Report a bug')),
       note))
 }

@@ -4,6 +4,16 @@
   "description": "Private website activity tracker with a 24-hour timeline (Chrome, Manifest V3).",
   "version": "1.0.0",
   "license": "MIT",
+  "homepage": "https://github.com/azeezv/HoursWatch",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/azeezv/HoursWatch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/azeezv/HoursWatch/issues",
+    "email": "report@azeezv.me"
+  },
+  "author": "Abdul Azeez V",
   "type": "module",
   "devDependencies": {
     "@types/chrome": "^0.0.287",

@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "description": "Private, local website activity tracker with a 24-hour timeline. See where your browsing time goes.",
   "minimum_chrome_version": "116",
+  "homepage_url": "https://github.com/azeezv/HoursWatch",
   "icons": {
     "16": "images/icon-16.png",
     "32": "images/icon-32.png",
