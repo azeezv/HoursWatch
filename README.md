@@ -1,6 +1,9 @@
 <div align="center">
 
-# HoursWatch
+<img src="src/images/icon-128.png" style="margin-bottom:10px;" alt="" width="38" height="38" align="absmiddle" />
+<h1>
+  HoursWatch
+</h1>
 
 **See where your browsing time actually goes. Privately.**
 
@@ -175,7 +178,7 @@ tests/          Vitest unit tests
 
 Bug reports, ideas and pull requests are welcome.
 
-- **Bugs and feature requests**: [open an issue](https://github.com/azeezv/HoursWatch/issues), or email [report@azeezv.me](mailto:report@azeezv.me).
+- **Bugs and feature requests**: [open an issue](https://github.com/azeezv/HoursWatch/issues). **Feedback or questions**: email [hello@azeezv.me](mailto:hello@azeezv.me).
 - **Pull requests**: run `npm run typecheck && npm test` first, and keep changes focused. Commit subjects use `feat:`, `fix:` or `chore:`.
 
 ## License

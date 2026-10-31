@@ -46,6 +46,6 @@ HoursWatch does not collect personal information and is not directed at children
 If this policy changes, the updated version and date will be published at this address, and the extension's version notes will mention it.
 
 ## Contact
-Questions or bug reports: report@azeezv.me, or open an issue at https://github.com/azeezv/HoursWatch/issues.
+Questions or bug reports: hello@azeezv.me, or open an issue at https://github.com/azeezv/HoursWatch/issues.
 
 HoursWatch is open source: https://github.com/azeezv/HoursWatch

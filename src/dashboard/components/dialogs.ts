@@ -224,6 +224,8 @@ export function openSettingsDialog(
         `HoursWatch ${chrome.runtime.getManifest().version} · `,
         h('a', {href: 'https://github.com/azeezv/HoursWatch', target: '_blank', rel: 'noopener noreferrer'}, 'Open source on GitHub'),
         ' · ',
-        h('a', {href: 'mailto:report@azeezv.me?subject=HoursWatch%20feedback'}, 'Report a bug')),
+        h('a', {href: 'https://github.com/azeezv/HoursWatch/issues/new', target: '_blank', rel: 'noopener noreferrer'}, 'Report a bug'),
+        ' · ',
+        h('a', {href: 'mailto:hello@azeezv.me?subject=HoursWatch%20feedback'}, 'Feedback')),
       note))
 }
