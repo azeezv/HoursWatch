@@ -133,22 +133,32 @@ export function openSettingsDialog(
     h('option', {value: '24'}, '24-hour (14:30)'), h('option', {value: '12'}, '12-hour (2:30 PM)'))
   hour12.value = current.hour12 ? '12' : '24'
 
-  const enabled = h('input', {type: 'checkbox', checked: current.trackingEnabled, onchange: () => save({trackingEnabled: enabled.checked})})
-  const group = h('input', {type: 'checkbox', checked: current.groupSubdomains, onchange: () => save({groupSubdomains: group.checked})})
-  const idleOn = h('input', {type: 'checkbox', checked: current.idleDetection, onchange: () => {
-    idleMin.disabled = !idleOn.checked
-    void save({idleDetection: idleOn.checked})
-  }})
+  const toggle = (checked: boolean, label: string, onchange: (on: boolean) => void) => {
+    const input = h('input', {type: 'checkbox', role: 'switch', checked, 'aria-label': label, onchange: () => onchange(input.checked)})
+    return {input, el: h('span', {class: 'switch'}, input, h('span', {class: 'switch-track'}))}
+  }
+  const enabled = toggle(current.trackingEnabled, 'Tracking', (on) => save({trackingEnabled: on}))
+  const group = toggle(current.groupSubdomains, 'Group subdomains', (on) => save({groupSubdomains: on}))
+  const idleOn = toggle(current.idleDetection, 'Pause when away', (on) => {
+    idleMin.disabled = !on
+    void save({idleDetection: on})
+  })
   const idleMin = h('input', {type: 'number', class: 'input input-num', min: '1', max: String(MAX_IDLE_MINUTES), step: '1', value: String(current.idleMinutes), disabled: !current.idleDetection,
-    'aria-label': 'Minutes without activity before you count as away',
+    'aria-label': 'Minutes of inactivity before you count as away',
     onchange: () => {
       const v = Math.min(MAX_IDLE_MINUTES, Math.max(1, Number(idleMin.value) || DEFAULT_SETTINGS.idleMinutes))
       idleMin.value = String(v)
       void save({idleMinutes: v})
     }})
   const minVisit = h('input', {type: 'number', class: 'input input-num', min: '0', max: '600', step: '1', value: String(current.minVisitSeconds),
-    onchange: () => save({minVisitSeconds: Math.min(600, Math.max(0, Number(minVisit.value) || 0))})})
-  const excluded = h('textarea', {class: 'input', rows: 3, placeholder: 'e.g. mybank.com\nmail.example.com', value: current.excludedDomains.join('\n'),
+    'aria-label': 'Ignore visits shorter than this many seconds',
+    onchange: () => {
+      const v = Math.min(600, Math.max(0, Number(minVisit.value) || 0))
+      minVisit.value = String(v)
+      void save({minVisitSeconds: v})
+    }})
+  const excluded = h('textarea', {class: 'input', rows: 3, placeholder: 'mybank.com\nmail.example.com', value: current.excludedDomains.join('\n'),
+    'aria-label': 'Websites never tracked, one per line',
     onchange: () => {
       const list = parseExcludedDomains(excluded.value)
       excluded.value = list.join('\n')
@@ -183,28 +193,32 @@ export function openSettingsDialog(
         : h('button', {class: 'btn btn-danger-outline', type: 'button', onclick: () => showDanger(true)}, 'Delete all activity data…'))
   showDanger(false)
 
-  const field = (label: string, control: Node, help?: string) =>
-    h('label', {class: 'field'}, h('span', {class: 'field-label'}, label), control, help ? h('span', {class: 'help'}, help) : null)
+  const row = (label: string, hint: string | null, control: Node) =>
+    h('div', {class: 's-row'},
+      h('div', {class: 's-text'}, h('span', {class: 's-label'}, label), hint ? h('span', {class: 'help'}, hint) : null),
+      control)
+  const section = (title: string, ...rows: Node[]) =>
+    h('section', {class: 's-section'}, h('h3', {class: 's-title'}, title), h('div', {class: 's-card'}, ...rows))
 
   const {close} = modal('Settings',
     h('div', {class: 'dialog-body'},
-      h('label', {class: 'check'}, enabled, h('span', {}, 'Track browsing activity'), h('span', {class: 'help'}, 'Turn off to pause all recording.')),
-      field('Theme', theme),
-      field('Time format', hour12),
-      h('label', {class: 'check'}, group, h('span', {}, 'Group subdomains under their website'),
-        h('span', {class: 'help'}, 'mail.google.com and docs.google.com count as google.com. Open a visit to see the exact hostname. CSV exports always list the exact hostname.')),
-      h('div', {class: 'field'},
-        h('label', {class: 'check'}, idleOn, h('span', {}, 'Pause when I’m away or the screen is locked')),
-        h('span', {class: 'field-label inline'}, 'Count me as away after ', idleMin, ' minutes of inactivity'),
-        h('span', {class: 'help'}, 'Away time is not counted: a visit ends when you last touched the computer. Watching a video without touching the mouse can look like being away; turn this off or raise the time if that matters.')),
-      field('Ignore visits shorter than (seconds)', minVisit, 'Filters out tabs you only flicked past.'),
-      field('Never track these websites', excluded, 'One per line. Subdomains are included.'),
-      h('hr', {}),
-      h('h3', {}, 'Privacy'),
-      h('ul', {class: 'privacy'},
-        h('li', {}, 'Recorded: the website’s domain (e.g. github.com) and when you were actively looking at it — start, end and duration.'),
-        h('li', {}, 'Never recorded: page URLs, titles, page content, form entries, passwords, cookies, or anything from private (incognito) windows.'),
-        h('li', {}, 'Everything is stored only on this computer in Chrome’s local extension storage. Nothing is ever sent over the network — there is no server, account or analytics.'),
-        h('li', {}, 'Time counts only while Chrome is the focused window, the site is the active tab, and you are at the computer (not idle for longer than your away threshold, default 5 minutes, and the screen not locked). Only the idle/locked state is read, never what you do.')),
-      usage, danger, note))
+      section('General',
+        row('Tracking', 'Switch off to pause recording. Nothing is saved while it’s off.', enabled.el),
+        row('Theme', null, theme),
+        row('Time format', null, hour12)),
+      section('Rules',
+        row('Group subdomains', 'Count mail.google.com as google.com.', group.el),
+        row('Pause when away', 'Stop counting when you’re idle or the screen is locked.', idleOn.el),
+        row('Away after (minutes)', null, idleMin),
+        row('Ignore short visits (seconds)', null, minVisit),
+        h('div', {class: 's-row s-stack'},
+          h('div', {class: 's-text'}, h('span', {class: 's-label'}, 'Never track'), h('span', {class: 'help'}, 'One website per line. Subdomains included.')),
+          excluded)),
+      section('Data',
+        h('div', {class: 's-row s-stack'}, usage),
+        h('details', {class: 's-row s-stack privacy'},
+          h('summary', {}, 'How your data is handled'),
+          h('p', {class: 'help'}, 'Only the domain and the start, end and duration of each visit are saved — never URLs, titles, page content or incognito activity. Everything stays on this computer; nothing is sent anywhere.')),
+        h('div', {class: 's-row'}, h('div', {class: 's-text'}, h('span', {class: 's-label'}, 'Delete all data')), danger)),
+      note))
 }
