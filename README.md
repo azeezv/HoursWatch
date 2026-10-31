@@ -1,16 +1,52 @@
+<div align="center">
+
 # HoursWatch
 
-A private, local website-activity tracker for Chrome. It records **which websites you actively looked at, when, and for how long**, and shows it as a 24-hour timeline with daily stats, searchable history and CSV export.
+**See where your browsing time actually goes. Privately.**
 
-Everything stays on your computer. No account, no server, no analytics.
+A Chrome extension that tracks the websites you actively look at and shows them as a 24-hour timeline, with daily stats, searchable history and CSV export. Everything stays on your computer.
 
-Built with TypeScript, Manifest V3 and [Extension.js](https://extension.js.org). No UI framework: plain TypeScript, HTML and CSS.
+![Manifest V3](https://img.shields.io/badge/Manifest-V3-4285F4?logo=googlechrome&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-141%20passing-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Privacy](https://img.shields.io/badge/data-100%25%20local-success)
 
-## Install (Load unpacked)
+</div>
+
+---
+
+## Features
+
+- **24-hour timeline**: one block per visit, placed by its real start and end time. Zoom, hover, click for details.
+- **Any date range**: Today, Yesterday, 7 Days, or a custom range from a calendar. Ranges show a daily-totals chart and a trend against the previous period.
+- **Website breakdown**: time, share and visits per site, with subdomains grouped under their website (expand to see each one).
+- **Visit history**: search, sort, and back-to-back visits folded into one row.
+- **Only real, active time**: counts while Chrome is focused, the site is the active tab, and you are at your computer. Locking the screen or walking away stops the clock.
+- **Toolbar popup**: current status, today's total, top sites, and a Pause/Resume button.
+- **CSV export** for a day, a range, or all history.
+- **Light and dark themes**, 12/24-hour time, never-track list.
+
+## Privacy
+
+HoursWatch is built so your data cannot leave your machine.
+
+- Stores only the **domain** (e.g. `github.com`) and the start, end and duration of each visit.
+- Never stores URLs, page titles, page content, form data, passwords or cookies. Never runs in incognito.
+- **No network access**: no server, no account, no analytics. There are no content scripts and no host permissions.
+- Pause with one switch, or delete everything in Settings.
+
+Read the full [Privacy Policy](PRIVACY.md).
+
+## Install
+
+### From source (load unpacked)
 
 Requires Node 20+ and Chrome 116+.
 
 ```bash
+git clone https://github.com/azeezv/HoursWatch.git
+cd HoursWatch
 npm install
 npm run build          # writes the extension to dist/chrome
 ```
@@ -19,11 +55,10 @@ Then in Chrome:
 
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode** (top-right toggle).
-3. Click **Load unpacked**.
-4. Select the **`dist/chrome`** folder inside this project (the folder that contains `manifest.json`).
-5. Click the puzzle-piece icon in the toolbar and **pin HoursWatch**.
+3. Click **Load unpacked** and select the **`dist/chrome`** folder (the one containing `manifest.json`).
+4. Click the puzzle-piece icon in the toolbar and **pin HoursWatch**.
 
-Tracking starts immediately. After changing the code, run `npm run build` again and press the reload icon on the extension's card in `chrome://extensions`.
+Tracking starts immediately. After changing the code, run `npm run build` again and press the reload icon on the extension's card.
 
 ### Development
 
@@ -33,7 +68,24 @@ npm test               # unit tests (Vitest)
 npm run typecheck
 ```
 
-## Using it
+> Don't run `npm run dev` and `npm run build` at the same time: both write to `dist/chrome`.
+
+## Permissions
+
+| Permission | Why it is needed |
+| --- | --- |
+| `tabs` | Read the **URL of the active tab** so its domain can be recorded and eligibility decided. Without it Chrome hides `tab.url`. Only the hostname is ever stored. |
+| `storage` | Save visits and settings in `chrome.storage.local`. |
+| `unlimitedStorage` | Local storage is capped at 10 MB, which heavy browsing (tens of thousands of visits) can exceed. Without this, recording would silently start failing. |
+| `idle` | Ask Chrome whether you are `active`, `idle` or `locked`, so time you spent away from the computer isn't counted. Only that state is read, never what you do. |
+| `alarms` | A one-minute heartbeat that wakes the service worker if Chrome suspended it, so an open visit is re-verified and checkpointed. It never counts time. |
+
+No host permissions, no content scripts, no `webNavigation`, no `history`, no network access. Navigation is detected through `tabs.onUpdated`, which also reports single-page-app URL changes, so `webNavigation` isn't needed.
+
+## Documentation
+
+<details>
+<summary><b>Using the extension</b></summary>
 
 - **Toolbar icon**: a popup with the current status (tracking / paused), today's total, a mini 24-hour strip, your top sites, a **Pause/Resume** button and **Open dashboard**.
 - **Dashboard** (opens in a tab; also reachable from `chrome://extensions` → HoursWatch → *Extension options*):
@@ -51,7 +103,10 @@ npm run typecheck
 Columns: `Date, Website Domain, Visit Start Time, Visit End Time, Duration in Seconds, Duration (Human-Readable)`.
 Times are local (`YYYY-MM-DD HH:mm:ss`). A visit crossing midnight is exported as one row per day, each with that day's share of the duration. Files are UTF-8 with a BOM so Excel opens them correctly, values are RFC 4180-escaped, and cells that look like spreadsheet formulas are neutralised. Filenames: `hourswatch-2025-06-10.csv`, `hourswatch-2025-06-01_to_2025-06-10.csv`, `hourswatch-all-history-2025-06-10.csv`. Files are generated in the page; nothing is uploaded.
 
-## What counts as tracked time
+</details>
+
+<details>
+<summary><b>What counts as tracked time</b></summary>
 
 Time accrues only while **both** are true: the Chrome window is focused, **and** the site is the active tab of that window.
 
@@ -66,29 +121,12 @@ It pauses immediately when you switch tabs, switch to another app, lose window f
 - Navigating within one domain (links, SPA route changes, switching between two tabs of the same site) continues the same visit. Switching domains closes it and starts a new one.
 - Visits shorter than 1 second (configurable) are dropped, so flicking through tabs doesn't create noise.
 
-## Permissions and why
+</details>
 
-| Permission | Why it is needed |
-| --- | --- |
-| `tabs` | Read the **URL of the active tab** so its domain can be recorded and eligibility decided. Without it Chrome hides `tab.url`. Only the hostname is ever stored. |
-| `storage` | Save visits and settings in `chrome.storage.local`. |
-| `unlimitedStorage` | Local storage is capped at 10 MB, which heavy browsing (tens of thousands of visits) can exceed. Without this, recording would silently start failing. |
-| `idle` | Ask Chrome whether you are `active`, `idle` or `locked`, so time you spent away from the computer isn't counted. Only that state is read, never what you do. |
-| `alarms` | A one-minute heartbeat that wakes the service worker if Chrome suspended it, so an open visit is re-verified and checkpointed. It never counts time. |
+<details>
+<summary><b>How it works (architecture)</b></summary>
 
-No host permissions, no content scripts, no `webNavigation`, no `history`, no network access. Navigation is detected through `tabs.onUpdated`, which also reports single-page-app URL changes, so `webNavigation` isn't needed.
-
-## Privacy
-
-**Stored**, per visit: the domain (e.g. `github.com`), start time, end time, duration, and a random id. Plus your settings and a domain → color map (cosmetic).
-
-**Never stored**: page URLs, paths, query strings, titles, page contents, form data, passwords, cookies, or anything from incognito windows. The extension has no content scripts and cannot read pages.
-
-**Where**: only in this browser profile's local extension storage. There is no backend, account, analytics or network code. **Settings → Delete all activity data** removes every record and the color map.
-
-## How it works
-
-```
+```text
 src/
   background/   service worker: events -> TrackingEngine (the state machine)
     engine.ts     reconciles persisted session with the real browser state
@@ -113,19 +151,33 @@ tests/          Vitest unit tests
 
 **Midnight and DST.** Visits are stored whole and split at **local** midnight when reporting/rendering. Days are computed with calendar arithmetic, so 23- and 25-hour DST days are correct; the timeline axis uses the day's real length.
 
-## Support and contributing
+</details>
 
-- Report a bug or request a feature: [GitHub Issues](https://github.com/azeezv/HoursWatch/issues), or email [report@azeezv.me](mailto:report@azeezv.me).
-- Source code: https://github.com/azeezv/HoursWatch (MIT).
-
-## Tests
+<details>
+<summary><b>Tests</b></summary>
 
 `npm test` runs 141 tests covering tab switching, window-focus changes (including focus loss with no event), idle and locked-screen handling, same/cross-domain navigation, ineligible pages, incognito, pause and exclusions, service-worker restart and gap recovery, browser restart, clock skew, midnight and DST boundaries, duration/stat calculations, storage persistence and migrations, colors, and CSV output.
 
-## Known limitations
+</details>
+
+<details>
+<summary><b>Known limitations</b></summary>
 
 - **Passive viewing can look like being away.** Chrome only counts keyboard and mouse input, so watching a long video without touching anything is treated as idle after the threshold (default 5 minutes). Raise the threshold or switch away-detection off in Settings.
 - A crash or power loss can lose up to ~15 s at the end of the last visit (the throttled checkpoint), never more.
 - Grouping uses a built-in approximation of the Public Suffix List (country second-level suffixes such as `co.uk`, plus common hosting platforms), not the full list, so an unusual suffix may group at the wrong level. Turn grouping off to see raw hostnames.
 - Domains are stored as Chrome reports them (IDN hostnames appear in punycode).
 - Per-visit records only: there is no per-page or per-title breakdown, by design.
+
+</details>
+
+## Contributing and support
+
+Bug reports, ideas and pull requests are welcome.
+
+- **Bugs and feature requests**: [open an issue](https://github.com/azeezv/HoursWatch/issues), or email [report@azeezv.me](mailto:report@azeezv.me).
+- **Pull requests**: run `npm run typecheck && npm test` first, and keep changes focused. Commit subjects use `feat:`, `fix:` or `chore:`.
+
+## License
+
+[MIT](package.json). Built with TypeScript, Manifest V3 and [Extension.js](https://extension.js.org), with no UI framework.
