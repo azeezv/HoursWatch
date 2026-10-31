@@ -17,6 +17,11 @@ A Chrome extension that tracks the websites you actively look at and shows them 
 
 </div>
 
+<div style="display: flex; gap: 20px;">
+  <img src="./screenshots/dark.png" style="margin-bottom:10px;" alt="" width="48%" />
+  <img src="./screenshots/weekly.png" style="margin-bottom:10px;" alt="" width="48%" />
+</div>
+
 ---
 
 ## Features

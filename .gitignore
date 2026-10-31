@@ -39,3 +39,4 @@ extension-env.d.ts
 !.env.*.example
 
 store
+.temp
