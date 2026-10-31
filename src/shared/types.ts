@@ -43,6 +43,12 @@ export interface Settings {
   trackingEnabled: boolean
   /** Visits shorter than this are discarded when they close. */
   minVisitSeconds: number
+  /** Stop counting while the user is away (no input) or the screen is locked. */
+  idleDetection: boolean
+  /** Minutes without keyboard/mouse input before the user counts as away. */
+  idleMinutes: number
+  /** Show all subdomains of a site as one entry (`mail.google.com` + `docs.google.com` = `google.com`). */
+  groupSubdomains: boolean
   /** Domains (and their subdomains) that are never recorded. */
   excludedDomains: string[]
 }
@@ -54,12 +60,17 @@ export interface WorldSnapshot {
   tabId: number | null
   url: string | null
   incognito: boolean
+  /** From chrome.idle. `active` whenever idle detection is off or unavailable. */
+  idleState: 'active' | 'idle' | 'locked'
 }
 
 /** A visit clipped to one local calendar day. */
 export interface Segment {
   visit: Visit
+  /** What the UI groups by: the site (`google.com`) or, with grouping off, the hostname. */
   domain: string
+  /** The exact hostname that was visited (`mail.google.com`). */
+  host: string
   start: number
   end: number
   /** Local day, `YYYY-MM-DD`. */
@@ -68,10 +79,21 @@ export interface Segment {
   continuesToNext: boolean
 }
 
+/** One exact hostname inside a grouped website. */
+export interface HostStat {
+  host: string
+  ms: number
+  visits: number
+  /** Share of the website's time, 0–100. */
+  percent: number
+}
+
 export interface DomainStat {
   domain: string
   ms: number
   visits: number
+  /** Hostnames making up this entry, largest first. */
+  hosts: HostStat[]
   /** Share of the day's tracked time, 0–100. */
   percent: number
 }

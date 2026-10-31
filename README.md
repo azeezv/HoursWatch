@@ -43,7 +43,7 @@ npm run typecheck
   - **Website breakdown**: per-domain time, share, visit count and bars. Click a domain to filter the history and dim other sites on the timeline.
   - **Visit history**: search by domain; scope = selected day / date range / all history; sort by time, duration or domain (either direction); grouped by date when viewing several days; *Reset filters*.
   - **Export CSV**: selected day, custom range, or all history (see below).
-  - **Settings**: theme, 12/24-hour time, pause tracking, ignore very short visits, never-track list, privacy summary, **delete all data**.
+  - **Settings**: theme, 12/24-hour time, subdomain grouping, pause tracking, away detection and threshold, ignore very short visits, never-track list, privacy summary, **delete all data**.
 
 ### CSV export
 
@@ -54,11 +54,14 @@ Times are local (`YYYY-MM-DD HH:mm:ss`). A visit crossing midnight is exported a
 
 Time accrues only while **both** are true: the Chrome window is focused, **and** the site is the active tab of that window.
 
-It pauses immediately when you switch tabs, switch to another app, lose window focus, navigate to an unsupported page, or close the tab. It resumes when Chrome is focused again on an eligible tab.
+It pauses immediately when you switch tabs, switch to another app, lose window focus, navigate to an unsupported page, close the tab, or **lock your screen**. It resumes when Chrome is focused again on an eligible tab.
+
+**Away detection.** A third condition is that you are at the computer. If there is no keyboard or mouse input for **5 minutes** (configurable in Settings, or switch it off), you count as away. The visit is then ended at the moment of your *last input*, not when the 5 minutes ran out, so the waiting time is not counted. When you touch the computer again, a new visit starts immediately. Caveat: watching a video without touching the mouse can look like being away; raise the threshold or turn the feature off if that matters to you.
 
 - Only `http(s)` pages are tracked. `chrome://`, extension pages (including this dashboard), `file:`, `about:`, `data:`, `view-source:` and the Chrome Web Store are ignored.
 - Incognito is never tracked (the extension is not allowed in incognito).
-- A domain is the hostname without a leading `www.` (`www.github.com` = `github.com`). Other subdomains are separate (`gist.github.com` ≠ `github.com`).
+- Each visit is recorded with its exact hostname, minus a leading `www.` (`www.github.com` = `github.com`). Switching between two subdomains (`mail.google.com` → `docs.google.com`) ends one visit and starts another.
+- **Grouping.** By default the dashboard and popup group subdomains under their website: `mail.google.com`, `docs.google.com` and `google.com` all count as **google.com**, and country suffixes are understood (`news.bbc.co.uk` → `bbc.co.uk`). In the website breakdown, click the arrow next to a site to expand it into its hostnames with time, share and visits. The exact hostname is also shown in the visit panel, tooltip and history rows. Hosting platforms where each subdomain is a different site (`alice.github.io`) are kept apart. Turn grouping off in Settings to see every hostname separately. Nothing is lost either way, because grouping is applied only when displaying. CSV exports always list the exact hostname.
 - Navigating within one domain (links, SPA route changes, switching between two tabs of the same site) continues the same visit. Switching domains closes it and starts a new one.
 - Visits shorter than 1 second (configurable) are dropped, so flicking through tabs doesn't create noise.
 
@@ -69,6 +72,7 @@ It pauses immediately when you switch tabs, switch to another app, lose window f
 | `tabs` | Read the **URL of the active tab** so its domain can be recorded and eligibility decided. Without it Chrome hides `tab.url`. Only the hostname is ever stored. |
 | `storage` | Save visits and settings in `chrome.storage.local`. |
 | `unlimitedStorage` | Local storage is capped at 10 MB, which heavy browsing (tens of thousands of visits) can exceed. Without this, recording would silently start failing. |
+| `idle` | Ask Chrome whether you are `active`, `idle` or `locked`, so time you spent away from the computer isn't counted. Only that state is read, never what you do. |
 | `alarms` | A one-minute heartbeat that wakes the service worker if Chrome suspended it, so an open visit is re-verified and checkpointed. It never counts time. |
 
 No host permissions, no content scripts, no `webNavigation`, no `history`, no network access. Navigation is detected through `tabs.onUpdated`, which also reports single-page-app URL changes, so `webNavigation` isn't needed.
@@ -110,12 +114,12 @@ tests/          Vitest unit tests
 
 ## Tests
 
-`npm test` runs 101 tests covering tab switching, window-focus changes (including focus loss with no event), same/cross-domain navigation, ineligible pages, incognito, pause and exclusions, service-worker restart and gap recovery, browser restart, clock skew, midnight and DST boundaries, duration/stat calculations, storage persistence and migrations, colors, and CSV output.
+`npm test` runs 129 tests covering tab switching, window-focus changes (including focus loss with no event), idle and locked-screen handling, same/cross-domain navigation, ineligible pages, incognito, pause and exclusions, service-worker restart and gap recovery, browser restart, clock skew, midnight and DST boundaries, duration/stat calculations, storage persistence and migrations, colors, and CSV output.
 
 ## Known limitations
 
-- **Idle/locked screens are not detected.** If Chrome stays focused on a tab while you're away, that time counts. Eligibility is defined as window focus + active tab only.
+- **Passive viewing can look like being away.** Chrome only counts keyboard and mouse input, so watching a long video without touching anything is treated as idle after the threshold (default 5 minutes). Raise the threshold or switch away-detection off in Settings.
 - A crash or power loss can lose up to ~15 s at the end of the last visit (the throttled checkpoint), never more.
-- Domains are hostnames, not registrable domains (no public-suffix list), so subdomains are listed separately.
+- Grouping uses a built-in approximation of the Public Suffix List (country second-level suffixes such as `co.uk`, plus common hosting platforms), not the full list, so an unusual suffix may group at the wrong level. Turn grouping off to see raw hostnames.
 - Domains are stored as Chrome reports them (IDN hostnames appear in punycode).
 - Per-visit records only: there is no per-page or per-title breakdown, by design.

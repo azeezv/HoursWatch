@@ -2,7 +2,7 @@ import {sendMessage} from '../background/messages'
 import {assignColors, domainColor, initColors} from '../dashboard/colors'
 import {h, replace} from '../dashboard/dom'
 import {normalizeSettings} from '../shared/settings'
-import {computeStats, segmentsForRange} from '../shared/stats'
+import {computeStats, groupSegments, segmentsForRange} from '../shared/stats'
 import {addDays, formatClock, formatDuration, startOfDay} from '../shared/time'
 import type {Settings, TrackerState} from '../shared/types'
 import {chromeStore, KEYS} from '../storage/store'
@@ -22,7 +22,7 @@ async function load() {
   const [raw, visits] = await Promise.all([store.get([KEYS.settings, KEYS.tracker]), repo.getRange(dayStart, dayEnd)])
   const settings: Settings = normalizeSettings(raw[KEYS.settings])
   const tracker: TrackerState = normalizeTracker(raw[KEYS.tracker])
-  const segs = segmentsForRange(visits, dayStart, dayEnd)
+  const segs = groupSegments(segmentsForRange(visits, dayStart, dayEnd), settings.groupSubdomains)
   await initColors()
   await assignColors(computeStats(segs).breakdown.map((d) => d.domain))
   render(settings, tracker, dayStart, dayEnd, segs)

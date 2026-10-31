@@ -1,3 +1,4 @@
+import {normalizeSettings} from '../shared/settings'
 import {chromeStore, KEYS} from '../storage/store'
 import {chromeEnv} from './chrome-env'
 import {TrackingEngine} from './engine'
@@ -66,6 +67,10 @@ chrome.tabs.onUpdated.addListener((_id, change) => {
 chrome.windows.onFocusChanged.addListener(() => sync('window-focus'))
 chrome.windows.onRemoved.addListener(() => sync('window-removed'))
 
+// The user came back (or went away/locked): idle -> active is what lets us
+// resume tracking immediately, since nothing else fires when you touch the mouse.
+chrome.idle.onStateChanged.addListener(() => sync('idle-state'))
+
 // Heartbeat: keeps the open visit's checkpoint fresh so a crash loses at most
 // about a minute, and lets us notice sleep/suspension gaps. Time itself is
 // never counted by this timer; it only re-verifies eligibility.
@@ -89,7 +94,10 @@ chrome.runtime.onSuspend?.addListener(() => sync('suspend'))
 
 // Pausing / excluding domains takes effect immediately.
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && KEYS.settings in changes) sync('settings')
+  if (area === 'local' && KEYS.settings in changes) {
+    applyIdleInterval()
+    sync('settings')
+  }
 })
 
 chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
@@ -109,6 +117,14 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
   return true
 })
 
+/** Make chrome.idle.onStateChanged use the user's threshold (API minimum is 15 s). */
+function applyIdleInterval() {
+  chrome.storage.local.get(KEYS.settings).then((raw) => {
+    const s = normalizeSettings(raw[KEYS.settings])
+    chrome.idle.setDetectionInterval(Math.max(15, Math.round(s.idleMinutes * 60)))
+  })
+}
+
 function ensureAlarm() {
   chrome.alarms.get(ALARM).then((a) => {
     if (!a) chrome.alarms.create(ALARM, {periodInMinutes: 1})
@@ -117,4 +133,5 @@ function ensureAlarm() {
 
 // Every worker (re)start: make sure the heartbeat exists and reconcile.
 ensureAlarm()
+applyIdleInterval()
 sync('worker-start')

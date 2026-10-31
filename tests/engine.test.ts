@@ -445,3 +445,116 @@ describe('tracking: leaving Chrome for another app without a focus event', () =>
     expect(await engine.sync()).toBe(false)
   })
 })
+
+describe('tracking: idle and locked screen', () => {
+  /** Let time pass the way it really does: the heartbeat re-verifies every minute. */
+  async function elapse(b: ReturnType<typeof setup>['browser'], e: ReturnType<typeof setup>['engine'], ms: number) {
+    for (let left = ms; left > 0; left -= MIN) {
+      b.advance(Math.min(MIN, left))
+      await e.sync(b.time, {poll: true})
+    }
+  }
+
+  // Default threshold is 5 minutes.
+  it('ends the visit when the user last interacted, not when idleness was detected', async () => {
+    const {browser, engine, visits} = setup()
+    browser.open(1, 'https://a.com/')
+    await engine.sync()
+    await elapse(browser, engine, 10 * MIN) // user works for 10 minutes
+    await elapse(browser, engine, 4 * MIN) // ...walks away; no input, but not yet past the threshold
+    browser.advance(1 * MIN)
+    browser.idle = 'idle' // chrome reports idle once 5 minutes without input have passed
+    expect(await engine.sync(browser.time, {poll: true})).toBe(false)
+    browser.advance(2 * HOUR) // long lunch
+    await engine.sync()
+    const v = await visits()
+    expect(v).toHaveLength(1)
+    expect(v[0].durationMs).toBe(10 * MIN) // not 15 minutes, and certainly not 2h15m
+    expect(v[0].endTime).toBe(v[0].startTime + 10 * MIN)
+  })
+
+  it('resumes with a fresh visit when the user comes back', async () => {
+    const {browser, engine, visits} = setup()
+    browser.open(1, 'https://a.com/')
+    await engine.sync()
+    await elapse(browser, engine, 1 * MIN)
+    await elapse(browser, engine, 4 * MIN)
+    browser.advance(1 * MIN)
+    browser.idle = 'idle'
+    await engine.sync()
+    browser.advance(30 * MIN)
+    browser.idle = 'active' // idle.onStateChanged -> sync
+    expect(await engine.sync()).toBe(true)
+    await elapse(browser, engine, 2 * MIN)
+    const v = await visits()
+    expect(v.map((x) => x.durationMs)).toEqual([1 * MIN, 2 * MIN])
+    expect(v[1].startTime).toBeGreaterThan(v[0].endTime! + 30 * MIN - 1)
+  })
+
+  it('a locked screen ends the visit immediately (no backdating)', async () => {
+    const {browser, engine, visits} = setup()
+    browser.open(1, 'https://a.com/')
+    await engine.sync()
+    await elapse(browser, engine, 3 * MIN)
+    browser.idle = 'locked'
+    await engine.sync()
+    browser.advance(1 * HOUR)
+    await engine.sync()
+    expect((await visits())[0].durationMs).toBe(3 * MIN)
+  })
+
+  it('does not start tracking while idle or locked', async () => {
+    const {browser, engine, visits} = setup()
+    browser.idle = 'idle'
+    browser.open(1, 'https://a.com/')
+    expect(await engine.sync()).toBe(false)
+    browser.idle = 'locked'
+    expect(await engine.sync()).toBe(false)
+    expect(await visits()).toHaveLength(0)
+  })
+
+  it('discards the visit if the user was already idle for its whole length', async () => {
+    const {browser, engine, visits} = setup()
+    browser.open(1, 'https://a.com/')
+    await engine.sync()
+    await elapse(browser, engine, 5 * MIN) // no input at all since the visit opened
+    browser.idle = 'idle' // reported at exactly the threshold
+    await engine.sync()
+    expect(await visits()).toHaveLength(0) // clamped to start -> below minimum -> dropped
+  })
+
+  it('ignores idleness entirely when idle detection is turned off', async () => {
+    const {browser, engine, store, visits} = setup()
+    await store.set({[KEYS.settings]: {idleDetection: false}})
+    browser.open(1, 'https://a.com/')
+    await engine.sync()
+    await elapse(browser, engine, 1 * HOUR)
+    browser.idle = 'idle'
+    expect(await engine.sync()).toBe(true)
+    expect((await visits())[0].durationMs).toBe(1 * HOUR)
+  })
+
+  it('honours a custom threshold', async () => {
+    const {browser, engine, store, visits} = setup()
+    await store.set({[KEYS.settings]: {idleMinutes: 2}})
+    browser.open(1, 'https://a.com/')
+    await engine.sync()
+    await elapse(browser, engine, 4 * MIN)
+    await elapse(browser, engine, 1 * MIN)
+    browser.advance(1 * MIN)
+    browser.idle = 'idle'
+    await engine.sync()
+    expect((await visits())[0].durationMs).toBe(4 * MIN)
+  })
+
+  it('does not backdate when the window also lost focus', async () => {
+    const {browser, engine, visits} = setup()
+    browser.open(1, 'https://a.com/')
+    await engine.sync()
+    await elapse(browser, engine, 8 * MIN)
+    browser.focused = false
+    browser.idle = 'idle'
+    await engine.sync()
+    expect((await visits())[0].durationMs).toBe(8 * MIN)
+  })
+})

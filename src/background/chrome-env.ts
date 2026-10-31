@@ -6,7 +6,8 @@ const NONE: WorldSnapshot = {
   windowId: null,
   tabId: null,
   url: null,
-  incognito: false
+  incognito: false,
+  idleState: 'active'
 }
 
 /** Reads the real browser state. Throws if the APIs are unavailable. */
@@ -21,7 +22,7 @@ export const chromeEnv: Env = {
     return true
   },
 
-  async snapshot(): Promise<WorldSnapshot> {
+  async snapshot(idleSeconds: number | null): Promise<WorldSnapshot> {
     let win: chrome.windows.Window
     try {
       win = await chrome.windows.getLastFocused()
@@ -38,7 +39,21 @@ export const chromeEnv: Env = {
       windowId: win.id,
       tabId: tab.id,
       url: tab.url ?? null,
-      incognito: win.incognito || tab.incognito
+      incognito: win.incognito || tab.incognito,
+      idleState: await queryIdle(idleSeconds)
     }
+  }
+}
+
+/**
+ * User presence. If the idle API is unavailable or fails we report `active`:
+ * presence is a refinement, and breaking all tracking over it would be worse.
+ */
+async function queryIdle(idleSeconds: number | null): Promise<WorldSnapshot['idleState']> {
+  if (idleSeconds === null) return 'active'
+  try {
+    return await chrome.idle.queryState(Math.max(15, idleSeconds))
+  } catch {
+    return 'active'
   }
 }

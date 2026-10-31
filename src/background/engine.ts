@@ -32,8 +32,11 @@ export interface Env {
    * that point is stale and must not be continued.
    */
   isFreshBoot?(): Promise<boolean>
-  /** Raw facts about the focused window / active tab. May throw. */
-  snapshot(): Promise<WorldSnapshot>
+  /**
+   * Raw facts about the focused window / active tab / user presence. May throw.
+   * `idleSeconds` is the away threshold, or null when idle detection is off.
+   */
+  snapshot(idleSeconds: number | null): Promise<WorldSnapshot>
 }
 
 interface Target {
@@ -53,6 +56,11 @@ interface Target {
  *   open session, target gone or other domain -> close it at `at`
  *   open session, same domain                 -> checkpoint it at `at`
  *   no session, eligible target               -> open one at `at`
+ *
+ * A target is eligible only if the window is focused, the tab is active and
+ * the user is present (not idle/locked). When the user went idle, the visit
+ * is ended at the moment their last input happened (now - threshold), so the
+ * waiting period is not counted; a locked screen ends it immediately.
  *
  * Why reconcile instead of trusting events: Chrome does not reliably emit an
  * event when focus moves to another *application* (notably on Linux), so the
@@ -129,7 +137,7 @@ export class TrackingEngine {
 
     let world: WorldSnapshot | null = null
     try {
-      world = await this.env.snapshot()
+      world = await this.env.snapshot(settings.idleDetection ? Math.round(settings.idleMinutes * 60) : null)
     } catch {
       world = null
     }
@@ -143,7 +151,12 @@ export class TrackingEngine {
       const target = settings.trackingEnabled ? eligibleTarget(world, settings) : null
 
       if (state.visitId !== null && (!target || target.domain !== state.domain)) {
-        await this.close(state, batch, settings, now)
+        // If idleness is the *only* thing making the tab ineligible, the user
+        // stopped interacting `idleMinutes` ago: end the visit there, not now.
+        const idleOnly =
+          !target && world.idleState === 'idle' && eligibleTarget({...world, idleState: 'active'}, settings) !== null
+        const end = idleOnly ? now - settings.idleMinutes * 60_000 : now
+        await this.close(state, batch, settings, Math.max(end, state.sessionStart as number))
       }
 
       if (state.visitId !== null && target) {
@@ -224,7 +237,7 @@ export class TrackingEngine {
 
 /** The tab that may accrue time right now, or null. */
 export function eligibleTarget(world: WorldSnapshot, settings: Settings): Target | null {
-  if (!world.windowFocused || world.incognito) return null
+  if (!world.windowFocused || world.incognito || world.idleState !== 'active') return null
   if (world.tabId === null || world.windowId === null) return null
   const domain = domainFromUrl(world.url)
   if (!domain || isExcluded(domain, settings.excludedDomains)) return null

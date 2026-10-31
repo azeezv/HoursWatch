@@ -96,6 +96,7 @@ export function clipVisit(v: Visit, from: number, to: number): Segment | null {
   return {
     visit: v,
     domain: v.domain,
+    host: v.domain,
     start,
     end,
     day: dayKey(start),

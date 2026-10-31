@@ -1,6 +1,6 @@
 import {sendMessage} from '../background/messages'
 import {DEFAULT_SETTINGS} from '../shared/settings'
-import {computeStats} from '../shared/stats'
+import {computeStats, groupSegments} from '../shared/stats'
 import {addDays, startOfDay, parseDayKey} from '../shared/time'
 import type {Segment, Settings} from '../shared/types'
 import {assignColors, initColors} from './colors'
@@ -47,7 +47,7 @@ const header = new Header({
       onSaved: (s) => {
         settings = s
         applyTheme()
-        render()
+        void refresh() // grouping changes what every list shows
       },
       onDeleted: () => {
         selected = null
@@ -126,7 +126,8 @@ async function loadHistory() {
   }
   history.setLoading(true)
   try {
-    const segs = f.scope === 'all' ? await data.all() : await data.range(history.range().from, history.range().to)
+    const raw = f.scope === 'all' ? await data.all() : await data.range(history.range().from, history.range().to)
+    const segs = groupSegments(raw, settings.groupSubdomains)
     if (token !== loadToken) return // a newer request superseded this one
     await assignColors(computeStats(segs).breakdown.map((d) => d.domain))
     historySegs = segs
@@ -139,7 +140,10 @@ async function loadHistory() {
 async function refresh() {
   try {
     showError(null)
-    ;[settings, daySegs, firstDay] = await Promise.all([data.settings(), data.day(day), data.firstStart()])
+    const [s, rawDay, first] = await Promise.all([data.settings(), data.day(day), data.firstStart()])
+    settings = s
+    firstDay = first
+    daySegs = groupSegments(rawDay, settings.groupSubdomains)
     await assignColors(computeStats(daySegs).breakdown.map((d) => d.domain))
     applyTheme()
     render()

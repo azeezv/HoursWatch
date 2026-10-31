@@ -181,7 +181,7 @@ export class History {
     const {search, domain, sortKey, sortDir} = this.filters
     let rows = this.segments
     if (domain) rows = rows.filter((s) => s.domain === domain)
-    if (search) rows = rows.filter((s) => s.domain.includes(search))
+    if (search) rows = rows.filter((s) => s.domain.includes(search) || s.host.includes(search))
     const dir = sortDir === 'asc' ? 1 : -1
     return [...rows].sort((a, b) => {
       const c =
@@ -242,7 +242,8 @@ export class History {
       'div',
       {class: `row${sel ? ' is-selected' : ''}`},
       h('button', {class: 'row-domain', type: 'button', title: `Show only ${seg.domain}`, onclick: () => { this.setDomain(seg.domain); this.cb.onDomain(seg.domain) }},
-        h('i', {class: 'dot', style: {background: domainColor(seg.domain)}}), seg.domain),
+        h('i', {class: 'dot', style: {background: domainColor(seg.domain)}}), seg.domain,
+        seg.host !== seg.domain ? h('span', {class: 'row-host', title: seg.host}, seg.host.slice(0, seg.host.length - seg.domain.length - 1)) : null),
       h('span', {class: 'row-date'}, showDate ? dayKey(seg.start) : ''),
       h('button', {class: 'row-time', type: 'button', title: 'Show on timeline', onclick: () => this.cb.onSelect(seg)},
         `${formatClock(seg.start, this.hour12)} – ${formatClock(seg.end, this.hour12)}`,

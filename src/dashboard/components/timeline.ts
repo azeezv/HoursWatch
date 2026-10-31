@@ -219,6 +219,7 @@ export class Timeline {
     replace(
       this.tooltip,
       h('div', {class: 'tip-domain'}, h('i', {class: 'dot', style: {background: domainColor(seg.domain)}}), seg.domain),
+      seg.host !== seg.domain ? h('div', {class: 'tip-note'}, seg.host) : null,
       h('div', {}, `${formatClock(seg.start, inp.hour12)} – ${formatClock(seg.end, inp.hour12)}`),
       h('div', {class: 'tip-duration'}, formatDuration(seg.end - seg.start)),
       seg.continuesFromPrev || seg.continuesToNext

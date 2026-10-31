@@ -1,6 +1,7 @@
 import {sendMessage} from '../../background/messages'
 import {buildCsv, csvBlob, exportFilename, type ExportRange} from '../../shared/csv'
 import {parseExcludedDomains} from '../../shared/domain'
+import {DEFAULT_SETTINGS, MAX_IDLE_MINUTES} from '../../shared/settings'
 import {addDays, dayKey, formatDayLong, formatDuration, parseDayKey, startOfDay} from '../../shared/time'
 import type {Settings} from '../../shared/types'
 import type {Data} from '../data'
@@ -130,6 +131,18 @@ export function openSettingsDialog(
   hour12.value = current.hour12 ? '12' : '24'
 
   const enabled = h('input', {type: 'checkbox', checked: current.trackingEnabled, onchange: () => save({trackingEnabled: enabled.checked})})
+  const group = h('input', {type: 'checkbox', checked: current.groupSubdomains, onchange: () => save({groupSubdomains: group.checked})})
+  const idleOn = h('input', {type: 'checkbox', checked: current.idleDetection, onchange: () => {
+    idleMin.disabled = !idleOn.checked
+    void save({idleDetection: idleOn.checked})
+  }})
+  const idleMin = h('input', {type: 'number', class: 'input input-num', min: '1', max: String(MAX_IDLE_MINUTES), step: '1', value: String(current.idleMinutes), disabled: !current.idleDetection,
+    'aria-label': 'Minutes without activity before you count as away',
+    onchange: () => {
+      const v = Math.min(MAX_IDLE_MINUTES, Math.max(1, Number(idleMin.value) || DEFAULT_SETTINGS.idleMinutes))
+      idleMin.value = String(v)
+      void save({idleMinutes: v})
+    }})
   const minVisit = h('input', {type: 'number', class: 'input input-num', min: '0', max: '600', step: '1', value: String(current.minVisitSeconds),
     onchange: () => save({minVisitSeconds: Math.min(600, Math.max(0, Number(minVisit.value) || 0))})})
   const excluded = h('textarea', {class: 'input', rows: 3, placeholder: 'e.g. mybank.com\nmail.example.com', value: current.excludedDomains.join('\n'),
@@ -175,6 +188,12 @@ export function openSettingsDialog(
       h('label', {class: 'check'}, enabled, h('span', {}, 'Track browsing activity'), h('span', {class: 'help'}, 'Turn off to pause all recording.')),
       field('Theme', theme),
       field('Time format', hour12),
+      h('label', {class: 'check'}, group, h('span', {}, 'Group subdomains under their website'),
+        h('span', {class: 'help'}, 'mail.google.com and docs.google.com count as google.com. Open a visit to see the exact hostname. CSV exports always list the exact hostname.')),
+      h('div', {class: 'field'},
+        h('label', {class: 'check'}, idleOn, h('span', {}, 'Pause when I’m away or the screen is locked')),
+        h('span', {class: 'field-label inline'}, 'Count me as away after ', idleMin, ' minutes of inactivity'),
+        h('span', {class: 'help'}, 'Away time is not counted: a visit ends when you last touched the computer. Watching a video without touching the mouse can look like being away; turn this off or raise the time if that matters.')),
       field('Ignore visits shorter than (seconds)', minVisit, 'Filters out tabs you only flicked past.'),
       field('Never track these websites', excluded, 'One per line. Subdomains are included.'),
       h('hr', {}),
@@ -183,6 +202,6 @@ export function openSettingsDialog(
         h('li', {}, 'Recorded: the website’s domain (e.g. github.com) and when you were actively looking at it — start, end and duration.'),
         h('li', {}, 'Never recorded: page URLs, titles, page content, form entries, passwords, cookies, or anything from private (incognito) windows.'),
         h('li', {}, 'Everything is stored only on this computer in Chrome’s local extension storage. Nothing is ever sent over the network — there is no server, account or analytics.'),
-        h('li', {}, 'Time counts only while Chrome is the focused window and the site is the active tab.')),
+        h('li', {}, 'Time counts only while Chrome is the focused window, the site is the active tab, and you are at the computer (not idle for longer than your away threshold, default 5 minutes, and the screen not locked). Only the idle/locked state is read, never what you do.')),
       usage, danger, note))
 }

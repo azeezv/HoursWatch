@@ -12,6 +12,7 @@ export class FakeBrowser implements Env {
   /** tabId -> url, per the active tab of the focused window */
   tabs = new Map<number, string>()
   activeTab: number | null = null
+  idle: 'active' | 'idle' | 'locked' = 'active'
   failSnapshot = false
   fresh = false
 
@@ -27,17 +28,18 @@ export class FakeBrowser implements Env {
     return f
   }
 
-  async snapshot(): Promise<WorldSnapshot> {
+  async snapshot(idleSeconds: number | null): Promise<WorldSnapshot> {
     if (this.failSnapshot) throw new Error('chrome api unavailable')
     if (!this.focused) {
-      return {windowFocused: false, windowId: null, tabId: null, url: null, incognito: false}
+      return {windowFocused: false, windowId: null, tabId: null, url: null, incognito: false, idleState: idleSeconds === null ? 'active' : this.idle}
     }
     return {
       windowFocused: true,
       windowId: this.windowId,
       tabId: this.activeTab,
       url: this.activeTab === null ? null : (this.tabs.get(this.activeTab) ?? null),
-      incognito: this.incognito
+      incognito: this.incognito,
+      idleState: idleSeconds === null ? 'active' : this.idle
     }
   }
 

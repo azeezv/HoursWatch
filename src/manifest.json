@@ -28,5 +28,5 @@
     "service_worker": "background/index.ts"
   },
   "incognito": "not_allowed",
-  "permissions": ["tabs", "storage", "unlimitedStorage", "alarms"]
+  "permissions": ["tabs", "storage", "unlimitedStorage", "alarms", "idle"]
 }

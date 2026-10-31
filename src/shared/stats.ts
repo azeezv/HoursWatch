@@ -1,5 +1,6 @@
+import {siteOf} from './domain'
 import {clipVisit, splitByDay, unionLength} from './time'
-import type {DayStats, DomainStat, Segment, Visit} from './types'
+import type {DayStats, DomainStat, HostStat, Segment, Visit} from './types'
 
 /** Clip visits to [from, to) and drop those that do not overlap. */
 export function segmentsForRange(visits: Visit[], from: number, to: number): Segment[] {
@@ -11,13 +12,21 @@ export function segmentsForRange(visits: Visit[], from: number, to: number): Seg
   return out.sort((a, b) => a.start - b.start || a.end - b.end)
 }
 
+/** Group segments by site (`siteOf`) or, when `group` is off, by exact hostname. */
+export function groupSegments(segments: Segment[], group: boolean): Segment[] {
+  return segments.map((s) => {
+    const domain = group ? siteOf(s.host) : s.host
+    return domain === s.domain ? s : {...s, domain}
+  })
+}
+
 /**
  * Summaries for a set of segments (normally one day).
  * `totalMs` is the union of the intervals, so overlapping records can never be
  * double counted; `sumMs` is the naive sum and is shown only if it differs.
  */
 export function computeStats(segments: Segment[]): DayStats {
-  const byDomain = new Map<string, {ms: number; visitIds: Set<string>}>()
+  const byDomain = new Map<string, {ms: number; visitIds: Set<string>; hosts: Map<string, {ms: number; visitIds: Set<string>}>}>()
   let sumMs = 0
   const visitIds = new Set<string>()
   const intervals: Array<[number, number]> = []
@@ -28,9 +37,13 @@ export function computeStats(segments: Segment[]): DayStats {
     intervals.push([s.start, s.end])
     visitIds.add(s.visit.id)
     let d = byDomain.get(s.domain)
-    if (!d) byDomain.set(s.domain, (d = {ms: 0, visitIds: new Set()}))
+    if (!d) byDomain.set(s.domain, (d = {ms: 0, visitIds: new Set(), hosts: new Map()}))
     d.ms += ms
     d.visitIds.add(s.visit.id)
+    let hs = d.hosts.get(s.host)
+    if (!hs) d.hosts.set(s.host, (hs = {ms: 0, visitIds: new Set()}))
+    hs.ms += ms
+    hs.visitIds.add(s.visit.id)
   }
 
   const totalMs = unionLength(intervals)
@@ -39,6 +52,9 @@ export function computeStats(segments: Segment[]): DayStats {
       domain,
       ms: d.ms,
       visits: d.visitIds.size,
+      hosts: [...d.hosts.entries()]
+        .map(([host, h]): HostStat => ({host, ms: h.ms, visits: h.visitIds.size, percent: d.ms > 0 ? (h.ms / d.ms) * 100 : 0}))
+        .sort((a, b) => b.ms - a.ms || a.host.localeCompare(b.host)),
       percent: sumMs > 0 ? (d.ms / sumMs) * 100 : 0
     }))
     .sort((a, b) => b.ms - a.ms || a.domain.localeCompare(b.domain))

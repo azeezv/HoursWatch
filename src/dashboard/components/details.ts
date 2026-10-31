@@ -29,6 +29,7 @@ export function renderDetails(
       h(
         'dl',
         {},
+        seg.host !== seg.domain ? pair('Hostname', seg.host) : null,
         pair('Date', dayKey(seg.start)),
         pair('Start', formatClock(seg.start, hour12)),
         pair('End', formatClock(seg.end, hour12)),
