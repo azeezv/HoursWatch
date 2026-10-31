@@ -1,7 +1,9 @@
+import {foldConsecutive} from '../../shared/stats'
 import {addDays, dayKey, formatClock, formatDayShort, formatDuration, parseDayKey, startOfDay} from '../../shared/time'
 import type {Segment} from '../../shared/types'
 import {domainColor} from '../colors'
 import {debounce, h, replace} from '../dom'
+import {icon} from '../icons'
 
 export type Scope = 'day' | 'range' | 'all'
 export type SortKey = 'time' | 'duration' | 'domain'
@@ -18,6 +20,8 @@ export interface HistoryFilters {
 }
 
 const PAGE = 200
+/** Visits at least this long are highlighted. */
+const LONG_MS = 60_000
 
 const defaults = (day: number): HistoryFilters => ({
   scope: 'day',
@@ -52,11 +56,11 @@ export class History {
   private from = h('input', {type: 'date', class: 'input', 'aria-label': 'From date'})
   private to = h('input', {type: 'date', class: 'input', 'aria-label': 'To date'})
   private rangeBox = h('span', {class: 'range-box'}, this.from, h('span', {}, '→'), this.to)
-  private sortKey = h('select', {class: 'input', 'aria-label': 'Sort by'},
-    h('option', {value: 'time'}, 'Sort: visit time'),
-    h('option', {value: 'duration'}, 'Sort: duration'),
-    h('option', {value: 'domain'}, 'Sort: domain'))
-  private sortDir = h('button', {class: 'btn btn-icon', type: 'button'})
+  private sub = h('p', {class: 'panel-sub'})
+  private reset_ = h('button', {class: 'btn btn-icon', type: 'button', title: 'Reset filters', 'aria-label': 'Reset filters'}, icon('reset', 16))
+  private expandedGroups = new Set<string>()
+  /** True when the "selected day" scope covers several days (week view). */
+  private multiDay = false
   private chip = h('div', {class: 'chip-row'})
   private list = h('div', {class: 'history-list'})
 
@@ -80,15 +84,6 @@ export class History {
       rerender()
     }, 80)
     this.search.addEventListener('input', debounced)
-    this.sortKey.addEventListener('change', () => {
-      this.filters.sortKey = this.sortKey.value as SortKey
-      rerender()
-    })
-    this.sortDir.addEventListener('click', () => {
-      this.filters.sortDir = this.filters.sortDir === 'asc' ? 'desc' : 'asc'
-      this.syncControls()
-      rerender()
-    })
     this.scope.addEventListener('change', () => {
       this.filters.scope = this.scope.value as Scope
       this.syncControls()
@@ -104,11 +99,15 @@ export class History {
     this.from.addEventListener('change', rangeChanged)
     this.to.addEventListener('change', rangeChanged)
 
+    this.reset_.addEventListener('click', () => this.reset(day))
     this.el = h(
       'div',
       {class: 'history'},
-      h('div', {class: 'filters'}, this.search, this.scope, this.rangeBox, this.sortKey, this.sortDir,
-        h('button', {class: 'btn', type: 'button', onclick: () => this.reset(day)}, 'Reset filters')),
+      h('div', {class: 'panel-head panel-head-wrap'},
+        h('div', {}, h('h2', {id: 'h-history'}, 'Visit history'), this.sub),
+        h('div', {class: 'filters'},
+          h('span', {class: 'search-wrap'}, icon('search', 15), this.search),
+          this.scope, this.rangeBox, this.reset_)),
       this.chip,
       this.list
     )
@@ -139,6 +138,13 @@ export class History {
     else this.renderList()
   }
 
+  /** Week view: the default scope spans the week instead of one day. */
+  setPeriod(multiDay: boolean) {
+    if (multiDay === this.multiDay) return
+    this.multiDay = multiDay
+    this.scope.options[0].textContent = multiDay ? 'Last 7 days' : 'Selected day'
+  }
+
   setLoading(loading: boolean) {
     this.loading = loading
     if (loading) this.renderList()
@@ -161,13 +167,9 @@ export class History {
   private syncControls() {
     const f = this.filters
     this.scope.value = f.scope
-    this.sortKey.value = f.sortKey
     this.from.value = f.from
     this.to.value = f.to
     this.rangeBox.hidden = f.scope !== 'range'
-    this.sortDir.textContent = f.sortDir === 'asc' ? '↑' : '↓'
-    const label = f.sortDir === 'asc' ? 'Ascending' : 'Descending'
-    this.sortDir.title = this.sortDir.ariaLabel = `${label} (click to reverse)`
     replace(
       this.chip,
       f.domain
@@ -204,52 +206,119 @@ export class History {
       return
     }
     const rows = this.visible()
+    const total = rows.reduce((t, r) => t + (r.end - r.start), 0)
+    const f = this.filters
+    const where = f.scope === 'day' ? (this.multiDay ? 'in the last 7 days' : 'for the selected day') : f.scope === 'range' ? 'in the selected range' : 'in all history'
+    const narrowed = f.search || f.domain
+    this.sub.textContent = rows.length === 0
+      ? 'No detailed logs'
+      : `${rows.length}${narrowed ? ` of ${this.segments.length}` : ''} detailed ${rows.length === 1 ? 'log' : 'logs'} ${where} · ${formatDuration(total)} total`
+
     if (rows.length === 0) {
-      const filtered = this.filters.search || this.filters.domain
-      replace(this.list, h('p', {class: 'empty'}, filtered ? 'No visits match these filters.' : 'No visits recorded for this selection.'))
+      replace(this.list, h('p', {class: 'empty'}, narrowed ? 'No visits match these filters.' : 'No visits recorded for this selection.'))
       return
     }
 
-    const total = rows.reduce((s, r) => s + (r.end - r.start), 0)
-    const page = rows.slice(0, this.shown)
-    const grouped = this.filters.scope !== 'day' && this.filters.sortKey === 'time'
-    const showDate = this.filters.scope !== 'day' && !grouped
+    const items = this.items(rows)
+    const page = items.slice(0, this.shown)
+    const multi = f.scope !== 'day' || this.multiDay
+    const byDay = multi && f.sortKey === 'time'
+    const showDate = multi && !byDay
 
     const out: Array<HTMLElement> = [
-      h('div', {class: 'history-meta'}, `${rows.length} ${rows.length === 1 ? 'record' : 'records'} · ${formatDuration(total)} total`),
-      h('div', {class: 'row row-head', 'aria-hidden': 'true'}, h('span', {}, 'Website'), h('span', {}, showDate ? 'Date' : ''), h('span', {}, 'Start – End'), h('span', {class: 'num'}, 'Duration'))
+      h('div', {class: 'row row-head'},
+        this.sortHead('Website', 'domain'),
+        h('span', {}, showDate ? 'Date' : ''),
+        this.sortHead('Time interval', 'time'),
+        this.sortHead('Duration', 'duration', 'num'))
     ]
 
     let lastDay = ''
-    for (const seg of page) {
-      if (grouped && seg.day !== lastDay) {
-        lastDay = seg.day
-        const dayRows = rows.filter((r) => r.day === seg.day)
-        out.push(h('div', {class: 'group-head'}, h('strong', {}, formatDayShort(seg.start)),
-          h('span', {}, `${dayRows.length} ${dayRows.length === 1 ? 'visit' : 'visits'} · ${formatDuration(dayRows.reduce((s, r) => s + (r.end - r.start), 0))}`)))
+    for (const item of page) {
+      const first = item.segs[0]
+      if (byDay && first.day !== lastDay) {
+        lastDay = first.day
+        const dayRows = rows.filter((r) => r.day === first.day)
+        out.push(h('div', {class: 'group-head'}, h('strong', {}, formatDayShort(first.start)),
+          h('span', {}, `${dayRows.length} ${dayRows.length === 1 ? 'visit' : 'visits'} · ${formatDuration(dayRows.reduce((t, r) => t + (r.end - r.start), 0))}`)))
       }
-      out.push(this.row(seg, showDate))
+      if (item.segs.length === 1) out.push(this.row(first, showDate))
+      else out.push(...this.groupRows(item.segs, showDate))
     }
-    if (rows.length > page.length) {
-      out.push(h('button', {class: 'btn', type: 'button', onclick: () => { this.shown += PAGE; this.renderList() }}, `Show more (${rows.length - page.length} remaining)`))
+    if (items.length > page.length) {
+      out.push(h('button', {class: 'btn', type: 'button', onclick: () => { this.shown += PAGE; this.renderList() }}, `Show more (${items.length - page.length} remaining)`))
     }
     replace(this.list, ...out)
   }
 
-  private row(seg: Segment, showDate: boolean) {
+  /** Back-to-back visits to the same website on the same day fold into one expandable row (time order only). */
+  private items(rows: Segment[]): Array<{segs: Segment[]}> {
+    if (this.filters.sortKey !== 'time') return rows.map((seg) => ({segs: [seg]}))
+    return foldConsecutive(rows).map((segs) => ({segs}))
+  }
+
+  /** A clickable column title that sorts by that column (click again to reverse). */
+  private sortHead(label: string, key: SortKey, cls = '') {
+    const f = this.filters
+    const on = f.sortKey === key
+    return h('button', {
+      class: `sort-head${on ? ' is-on' : ''} ${cls}`.trim(),
+      type: 'button',
+      'aria-label': `Sort by ${label}${on ? (f.sortDir === 'asc' ? ', ascending' : ', descending') : ''}`,
+      onclick: () => {
+        if (on) f.sortDir = f.sortDir === 'asc' ? 'desc' : 'asc'
+        else { f.sortKey = key; f.sortDir = key === 'domain' ? 'asc' : 'desc' }
+        this.shown = PAGE
+        this.renderList()
+      }
+    }, label, on ? h('span', {class: 'sort-arrow', 'aria-hidden': 'true'}, f.sortDir === 'asc' ? '↑' : '↓') : null)
+  }
+
+  private nameCell(seg: Segment, tag: string | null) {
+    return h('button', {class: 'row-domain', type: 'button', title: `Show only ${seg.domain}`, onclick: () => { this.setDomain(seg.domain); this.cb.onDomain(seg.domain) }},
+      h('i', {class: 'dot dot-round', style: {background: domainColor(seg.domain)}}), seg.domain,
+      tag ? h('span', {class: 'tag', title: seg.host}, tag) : null)
+  }
+
+  private groupRows(segs: Segment[], showDate: boolean): HTMLElement[] {
+    const head = segs[0]
+    const key = `${head.visit.id}:${head.start}`
+    const open = this.expandedGroups.has(key)
+    const start = Math.min(...segs.map((s) => s.start))
+    const end = Math.max(...segs.map((s) => s.end))
+    const total = segs.reduce((t, s) => t + (s.end - s.start), 0)
+    const hosts = new Set(segs.map((s) => s.host))
+    const sub = (s: Segment) => (s.host !== s.domain ? s.host.slice(0, s.host.length - s.domain.length - 1) : null)
+    const tag = hosts.size === 1 ? sub(head) : null
+    const hasSel = segs.some((s) => this.selected?.visit.id === s.visit.id && this.selected.start === s.start)
+
+    const row = h('div', {class: `row row-group${hasSel && !open ? ' is-selected' : ''}`},
+      h('div', {class: 'row-name'},
+        h('button', {class: `bd-toggle${open ? ' is-open' : ''}`, type: 'button', 'aria-expanded': open,
+          'aria-label': `${open ? 'Hide' : 'Show'} ${segs.length} visits to ${head.domain}`,
+          onclick: () => { if (open) this.expandedGroups.delete(key); else this.expandedGroups.add(key); this.renderList() }}),
+        this.nameCell(head, tag)),
+      h('span', {class: 'row-date'}, showDate ? dayKey(head.start) : ''),
+      h('span', {class: 'row-time mono'}, `${formatClock(start, this.hour12)} – ${formatClock(end, this.hour12)}`),
+      h('span', {class: 'num row-total'}, h('span', {class: 'pill pill-strong'}, `${segs.length} visits`), h('span', {class: `mono dur${total >= LONG_MS ? ' dur-long' : ''}`}, `${formatDuration(total)} total`)))
+    if (!open) return [row]
+    return [row, ...segs.map((s) => this.row(s, showDate, true, hosts.size > 1 ? sub(s) ?? s.host : null))]
+  }
+
+  private row(seg: Segment, showDate: boolean, child = false, tagOverride?: string | null) {
     const sel = this.selected?.visit.id === seg.visit.id && this.selected.start === seg.start
+    const sub = seg.host !== seg.domain ? seg.host.slice(0, seg.host.length - seg.domain.length - 1) : null
+    const ms = seg.end - seg.start
     return h(
       'div',
-      {class: `row${sel ? ' is-selected' : ''}`},
-      h('button', {class: 'row-domain', type: 'button', title: `Show only ${seg.domain}`, onclick: () => { this.setDomain(seg.domain); this.cb.onDomain(seg.domain) }},
-        h('i', {class: 'dot', style: {background: domainColor(seg.domain)}}), seg.domain,
-        seg.host !== seg.domain ? h('span', {class: 'row-host', title: seg.host}, seg.host.slice(0, seg.host.length - seg.domain.length - 1)) : null),
+      {class: `row${child ? ' row-child' : ''}${sel ? ' is-selected' : ''}`},
+      child ? h('span', {class: 'row-name row-name-child'}, tagOverride ? h('span', {class: 'tag', title: seg.host}, tagOverride) : null) : h('div', {class: 'row-name'}, h('span', {class: 'bd-toggle-gap', 'aria-hidden': 'true'}), this.nameCell(seg, sub)),
       h('span', {class: 'row-date'}, showDate ? dayKey(seg.start) : ''),
-      h('button', {class: 'row-time', type: 'button', title: 'Show on timeline', onclick: () => this.cb.onSelect(seg)},
+      h('button', {class: 'row-time mono', type: 'button', title: 'Show on timeline', onclick: () => this.cb.onSelect(seg)},
         `${formatClock(seg.start, this.hour12)} – ${formatClock(seg.end, this.hour12)}`,
         seg.continuesFromPrev ? h('span', {class: 'tag', title: 'Started the previous day'}, ' ← from prev. day') : null,
         seg.continuesToNext ? h('span', {class: 'tag', title: 'Continues the next day'}, ' to next day →') : null),
-      h('span', {class: 'num'}, formatDuration(seg.end - seg.start))
+      h('span', {class: `num mono dur${ms >= LONG_MS ? ' dur-long' : ''}`}, formatDuration(ms))
     )
   }
 }

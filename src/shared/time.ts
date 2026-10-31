@@ -59,6 +59,19 @@ export function formatDayLong(ts: number): string {
   }).format(ts)
 }
 
+/** `Saturday, Oct 31, 2026`. */
+export function formatDayHeader(ts: number): string {
+  return new Intl.DateTimeFormat(undefined, {weekday: 'long', month: 'short', day: 'numeric', year: 'numeric'}).format(ts)
+}
+
+/** `Oct 25 – Oct 31, 2026` (years shown on both ends when they differ). */
+export function formatRange(from: number, to: number): string {
+  const sameYear = new Date(from).getFullYear() === new Date(to).getFullYear()
+  const a = new Intl.DateTimeFormat(undefined, sameYear ? {month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric', year: 'numeric'}).format(from)
+  const b = new Intl.DateTimeFormat(undefined, {month: 'short', day: 'numeric', year: 'numeric'}).format(to)
+  return `${a} – ${b}`
+}
+
 export function formatDayShort(ts: number): string {
   return new Intl.DateTimeFormat(undefined, {
     weekday: 'short',

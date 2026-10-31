@@ -85,3 +85,50 @@ export function daySegments(visits: Visit[], from: number, to: number): Segment[
   }
   return out.sort((a, b) => a.start - b.start || a.end - b.end)
 }
+
+/** Keep only the part of each segment that ends by `limit` (used to compare "so far today" with the same time yesterday). */
+export function clipSegmentsTo(segments: Segment[], limit: number): Segment[] {
+  const out: Segment[] = []
+  for (const s of segments) {
+    if (s.start >= limit) continue
+    out.push(s.end > limit ? {...s, end: limit} : s)
+  }
+  return out
+}
+
+/** Whole-number percent change from `previous` to `current`; null when there is nothing to compare with. */
+export function percentChange(current: number, previous: number): number | null {
+  if (!(previous > 0)) return null
+  return Math.round(((current - previous) / previous) * 100)
+}
+
+/**
+ * The few websites that account for most of the time: the smallest top-N whose
+ * combined share reaches `share` (default 80%). Null when there is no time.
+ */
+export function coreDomains(breakdown: DomainStat[], share = 0.8): {count: number; percent: number} | null {
+  const sum = breakdown.reduce((t, d) => t + d.ms, 0)
+  if (sum <= 0) return null
+  let acc = 0
+  let count = 0
+  for (const d of breakdown) {
+    acc += d.ms
+    count++
+    if (acc / sum >= share) break
+  }
+  return {count, percent: (acc / sum) * 100}
+}
+
+/**
+ * Fold back-to-back segments of the same website on the same day into runs
+ * (rows must already be in display order). A run of one is a plain visit.
+ */
+export function foldConsecutive(rows: Segment[]): Segment[][] {
+  const out: Segment[][] = []
+  for (const seg of rows) {
+    const last = out[out.length - 1]
+    if (last && last[0].domain === seg.domain && last[0].day === seg.day) last.push(seg)
+    else out.push([seg])
+  }
+  return out
+}

@@ -37,11 +37,12 @@ npm run typecheck
 
 - **Toolbar icon**: a popup with the current status (tracking / paused), today's total, a mini 24-hour strip, your top sites, a **Pause/Resume** button and **Open dashboard**.
 - **Dashboard** (opens in a tab; also reachable from `chrome://extensions` → HoursWatch → *Extension options*):
-  - **Header**: previous/next day, date picker, *Today*, *Export CSV*, *Settings*.
-  - **Summary**: total tracked time, visits, unique websites, most time on, most visits, average visit.
+  - **Header**: previous/next arrows and a date picker, quick **Today / Yesterday / 7 Days** buttons, a light/dark toggle, *Export CSV* and *Settings*.
+  - **7 Days** shows the last seven days ending today: the summary, website breakdown and history cover the whole week (the summary compares with the previous 7 days), and the 24-hour timeline is replaced by a bar for each day's total. Click a bar to open that day; the arrows then move a week at a time.
+  - **Summary**: total tracked time with the change vs yesterday (today is compared with yesterday up to the same time of day), visits and average visit, unique websites with how many "core" sites make up ~80% of your time, most time on and most visited.
   - **24-hour timeline**: one colored block per visit, positioned and sized by real start/end time. Hatched areas are time with no tracked browsing; a red line marks *now* (today only). Hover a block for details, click it for the visit panel. Zoom with **+/−** or **Ctrl + scroll**, scroll sideways when zoomed, **Jump to now**. Visits crossing midnight are split across both days.
-  - **Website breakdown**: per-domain time, share, visit count and bars. Click a domain to filter the history and dim other sites on the timeline.
-  - **Visit history**: search by domain; scope = selected day / date range / all history; sort by time, duration or domain (either direction); grouped by date when viewing several days; *Reset filters*.
+  - **Website breakdown**: your top 6 websites with time, share and visit count (**View all** lists every site), and the day's total. Click a site to filter the history and timeline; click the arrow to see its subdomains.
+  - **Visit history**: search by website; scope = selected day / date range / all history; click the column titles to sort by website, time or duration (click again to reverse); the reset button clears filters. Back-to-back visits to the same website fold into one expandable row ("4 visits · 19s total"), and visits of a minute or longer are highlighted.
   - **Export CSV**: selected day, custom range, or all history (see below).
   - **Settings**: theme, 12/24-hour time, subdomain grouping, pause tracking, away detection and threshold, ignore very short visits, never-track list, privacy summary, **delete all data**.
 
@@ -114,7 +115,7 @@ tests/          Vitest unit tests
 
 ## Tests
 
-`npm test` runs 129 tests covering tab switching, window-focus changes (including focus loss with no event), idle and locked-screen handling, same/cross-domain navigation, ineligible pages, incognito, pause and exclusions, service-worker restart and gap recovery, browser restart, clock skew, midnight and DST boundaries, duration/stat calculations, storage persistence and migrations, colors, and CSV output.
+`npm test` runs 137 tests covering tab switching, window-focus changes (including focus loss with no event), idle and locked-screen handling, same/cross-domain navigation, ineligible pages, incognito, pause and exclusions, service-worker restart and gap recovery, browser restart, clock skew, midnight and DST boundaries, duration/stat calculations, storage persistence and migrations, colors, and CSV output.
 
 ## Known limitations
 
