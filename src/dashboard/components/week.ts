@@ -18,7 +18,7 @@ export function renderWeek(root: HTMLElement, days: DayTotal[], today: number, o
     root,
     h(
       'div',
-      {class: 'week', role: 'list'},
+      {class: `week${days.length > 14 ? ' week-dense' : ''}`, role: 'list', style: {gridTemplateColumns: `repeat(${days.length}, minmax(${days.length > 14 ? 30 : 56}px, 1fr))`}},
       ...days.map((d) =>
         h(
           'button',
@@ -26,12 +26,12 @@ export function renderWeek(root: HTMLElement, days: DayTotal[], today: number, o
             class: `week-day${d.day === today ? ' is-today' : ''}${d.totalMs > 0 && d === best ? ' is-best' : ''}`,
             type: 'button',
             role: 'listitem',
-            title: `${dayNum(d.day)}: ${d.totalMs > 0 ? formatDuration(d.totalMs) : 'nothing tracked'}. Click to open this day.`,
+            title: `${weekday(d.day)} ${dayNum(d.day)}: ${d.totalMs > 0 ? formatDuration(d.totalMs) : 'nothing tracked'}. Click to open this day.`,
             onclick: () => onPick(d.day)
           },
-          h('span', {class: 'week-value mono'}, d.totalMs > 0 ? formatDuration(d.totalMs) : '–'),
+          days.length > 14 ? null : h('span', {class: 'week-value mono'}, d.totalMs > 0 ? formatDuration(d.totalMs) : '–'),
           h('span', {class: 'week-track'}, h('span', {class: 'week-bar', style: {height: `${(d.totalMs / max) * 100}%`}})),
-          h('span', {class: 'week-label'}, h('strong', {}, weekday(d.day)), h('span', {}, dayNum(d.day)))
+          h('span', {class: 'week-label'}, h('strong', {}, days.length > 14 ? String(new Date(d.day).getDate()) : weekday(d.day)), days.length > 14 ? null : h('span', {}, dayNum(d.day)))
         )
       )
     )

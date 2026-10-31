@@ -1,8 +1,8 @@
-import {dayKey, formatDayHeader, formatRange, addDays} from '../../shared/time'
+import {lastDays} from '../../shared/range'
+import {addDays, formatDayHeader, formatRange} from '../../shared/time'
 import {h, replace} from '../dom'
 import {icon} from '../icons'
-
-export type Mode = 'day' | 'week'
+import {closePicker, isPickerOpen, openRangePicker} from './datepicker'
 
 export interface HeaderHandlers {
   onPrev(): void
@@ -10,24 +10,23 @@ export interface HeaderHandlers {
   onToday(): void
   onYesterday(): void
   onWeek(): void
-  onPickDay(dayKey: string): void
+  /** A day (from === to) or a range was chosen. */
+  onRange(from: number, to: number): void
   onTheme(): void
   onExport(): void
   onSettings(): void
 }
 
 export interface HeaderState {
-  mode: Mode
-  /** Selected day (the last day of the range in week mode), local midnight. */
-  day: number
+  /** Selected range, inclusive, local midnights (a single day has from === to). */
+  from: number
+  to: number
   /** Local midnight of today. */
   today: number
-  /** Earliest day with data, for the date picker. */
+  /** Earliest day with data. */
   minDay: number | null
   /** The theme currently showing. */
   theme: 'light' | 'dark'
-  /** Days in the week range. */
-  weekDays: number
 }
 
 const LOGO = () => {
@@ -44,10 +43,11 @@ const LOGO = () => {
 export class Header {
   readonly el: HTMLElement
   private title = h('span', {class: 'date-text', id: 'date-title'})
-  private input = h('input', {type: 'date', class: 'date-input', 'aria-label': 'Choose date', tabIndex: -1})
+  private pill = h('div', {class: 'pill-group date-pill'})
+  private state: HeaderState | null = null
   private prev = h('button', {class: 'icon-btn', type: 'button'}, icon('left', 16))
   private next = h('button', {class: 'icon-btn', type: 'button'}, icon('right', 16))
-  private pick = h('button', {class: 'date-btn', type: 'button', title: 'Choose a date'}, icon('calendar', 16), this.title)
+  private pick = h('button', {class: 'date-btn', type: 'button', title: 'Choose a date or range', 'aria-haspopup': 'dialog'}, icon('calendar', 16), this.title)
   private today = h('button', {class: 'seg-btn', type: 'button'}, 'Today')
   private yesterday = h('button', {class: 'seg-btn', type: 'button'}, 'Yesterday')
   private week = h('button', {class: 'seg-btn', type: 'button'}, '7 Days')
@@ -60,11 +60,13 @@ export class Header {
     this.yesterday.addEventListener('click', handlers.onYesterday)
     this.week.addEventListener('click', handlers.onWeek)
     this.theme.addEventListener('click', handlers.onTheme)
-    this.input.addEventListener('change', () => this.input.value && handlers.onPickDay(this.input.value))
     this.pick.addEventListener('click', () => {
-      try { this.input.showPicker() } catch { this.input.focus() }
+      const st = this.state
+      if (isPickerOpen()) return closePicker()
+      if (st) openRangePicker({host: this.pill, from: st.from, to: st.to, today: st.today, minDay: st.minDay, onPick: handlers.onRange})
     })
 
+    this.pill.append(this.prev, h('h1', {class: 'date-title'}, this.pick), this.next)
     this.el = h(
       'header',
       {class: 'app-header'},
@@ -72,7 +74,7 @@ export class Header {
       h(
         'nav',
         {class: 'day-nav', 'aria-label': 'Date navigation'},
-        h('div', {class: 'pill-group date-pill'}, this.prev, h('h1', {class: 'date-title'}, this.pick), this.next, this.input),
+        this.pill,
         h('div', {class: 'pill-group seg', role: 'group', 'aria-label': 'Period'}, this.today, this.yesterday, this.week)
       ),
       h(
@@ -86,24 +88,21 @@ export class Header {
   }
 
   update(s: HeaderState) {
-    const isWeek = s.mode === 'week'
-    const unit = isWeek ? 'week' : 'day'
-    const atToday = s.day >= s.today
-    this.title.textContent = isWeek ? formatRange(addDays(s.day, -(s.weekDays - 1)), s.day) : formatDayHeader(s.day)
-    this.input.value = dayKey(s.day)
-    this.input.max = dayKey(s.today)
-    if (s.minDay !== null) this.input.min = dayKey(s.minDay)
+    this.state = s
+    const single = s.from === s.to
+    this.title.textContent = single ? formatDayHeader(s.to) : formatRange(s.from, s.to)
 
-    for (const [btn, label] of [[this.prev, `Previous ${unit}`], [this.next, `Next ${unit}`]] as const) {
+    for (const [btn, label] of [[this.prev, single ? 'Previous day' : 'Previous period'], [this.next, single ? 'Next day' : 'Next period']] as const) {
       btn.title = label
       btn.setAttribute('aria-label', label)
     }
-    this.next.disabled = atToday
+    this.next.disabled = s.to >= s.today
 
     const yesterday = addDays(s.today, -1)
-    this.setActive(this.today, s.mode === 'day' && s.day === s.today)
-    this.setActive(this.yesterday, s.mode === 'day' && s.day === yesterday)
-    this.setActive(this.week, isWeek)
+    const [weekFrom] = lastDays(7, s.today)
+    this.setActive(this.today, single && s.to === s.today)
+    this.setActive(this.yesterday, single && s.to === yesterday)
+    this.setActive(this.week, s.from === weekFrom && s.to === s.today)
 
     const next = s.theme === 'dark' ? 'light' : 'dark'
     this.theme.title = this.theme.ariaLabel = `Switch to ${next} theme`

@@ -1,11 +1,12 @@
 import {foldConsecutive} from '../../shared/stats'
-import {addDays, dayKey, formatClock, formatDayShort, formatDuration, parseDayKey, startOfDay} from '../../shared/time'
+import {dayKey, formatClock, formatDayShort, formatDuration} from '../../shared/time'
 import type {Segment} from '../../shared/types'
 import {domainColor} from '../colors'
 import {debounce, h, replace} from '../dom'
 import {icon} from '../icons'
 
-export type Scope = 'day' | 'range' | 'all'
+/** `day` = the period selected in the header (one day or a range). */
+export type Scope = 'day' | 'all'
 export type SortKey = 'time' | 'duration' | 'domain'
 
 export interface HistoryFilters {
@@ -14,23 +15,18 @@ export interface HistoryFilters {
   domain: string | null
   sortKey: SortKey
   sortDir: 'asc' | 'desc'
-  /** `YYYY-MM-DD` inputs for the custom range. */
-  from: string
-  to: string
 }
 
 const PAGE = 200
 /** Visits at least this long are highlighted. */
 const LONG_MS = 60_000
 
-const defaults = (day: number): HistoryFilters => ({
+const defaults = (): HistoryFilters => ({
   scope: 'day',
   search: '',
   domain: null,
   sortKey: 'time',
-  sortDir: 'desc',
-  from: dayKey(addDays(day, -6)),
-  to: dayKey(day)
+  sortDir: 'desc'
 })
 
 /**
@@ -51,11 +47,7 @@ export class History {
   private search = h('input', {type: 'search', class: 'input', placeholder: 'Search websites…', 'aria-label': 'Search websites'})
   private scope = h('select', {class: 'input', 'aria-label': 'History scope'},
     h('option', {value: 'day'}, 'Selected day'),
-    h('option', {value: 'range'}, 'Date range'),
     h('option', {value: 'all'}, 'All history'))
-  private from = h('input', {type: 'date', class: 'input', 'aria-label': 'From date'})
-  private to = h('input', {type: 'date', class: 'input', 'aria-label': 'To date'})
-  private rangeBox = h('span', {class: 'range-box'}, this.from, h('span', {}, '→'), this.to)
   private sub = h('p', {class: 'panel-sub'})
   private reset_ = h('button', {class: 'btn btn-icon', type: 'button', title: 'Reset filters', 'aria-label': 'Reset filters'}, icon('reset', 16))
   private expandedGroups = new Set<string>()
@@ -65,7 +57,6 @@ export class History {
   private list = h('div', {class: 'history-list'})
 
   constructor(
-    day: number,
     private cb: {
       /** Scope or range changed: the host must load different data. */
       onReload(): void
@@ -74,7 +65,7 @@ export class History {
       onDomain(domain: string | null): void
     }
   ) {
-    this.filters = defaults(day)
+    this.filters = defaults()
     const rerender = () => {
       this.shown = PAGE
       this.renderList()
@@ -89,17 +80,7 @@ export class History {
       this.syncControls()
       this.cb.onReload()
     })
-    const rangeChanged = () => {
-      if (!this.from.value || !this.to.value) return
-      if (this.from.value > this.to.value) [this.from.value, this.to.value] = [this.to.value, this.from.value]
-      this.filters.from = this.from.value
-      this.filters.to = this.to.value
-      this.cb.onReload()
-    }
-    this.from.addEventListener('change', rangeChanged)
-    this.to.addEventListener('change', rangeChanged)
-
-    this.reset_.addEventListener('click', () => this.reset(day))
+    this.reset_.addEventListener('click', () => this.reset())
     this.el = h(
       'div',
       {class: 'history'},
@@ -107,18 +88,11 @@ export class History {
         h('div', {}, h('h2', {id: 'h-history'}, 'Visit history'), this.sub),
         h('div', {class: 'filters'},
           h('span', {class: 'search-wrap'}, icon('search', 15), this.search),
-          this.scope, this.rangeBox, this.reset_)),
+          this.scope, this.reset_)),
       this.chip,
       this.list
     )
     this.syncControls()
-  }
-
-  /** Inclusive local-day bounds of the current range scope. */
-  range(): {from: number; to: number} {
-    const from = parseDayKey(this.filters.from) ?? startOfDay(Date.now())
-    const to = parseDayKey(this.filters.to) ?? from
-    return {from, to}
   }
 
   setDomain(domain: string | null) {
@@ -128,9 +102,9 @@ export class History {
     this.renderList()
   }
 
-  reset(day: number = startOfDay(Date.now())) {
+  reset() {
     const hadScope = this.filters.scope !== 'day'
-    this.filters = defaults(day)
+    this.filters = defaults()
     this.search.value = ''
     this.syncControls()
     this.cb.onDomain(null)
@@ -142,7 +116,7 @@ export class History {
   setPeriod(multiDay: boolean) {
     if (multiDay === this.multiDay) return
     this.multiDay = multiDay
-    this.scope.options[0].textContent = multiDay ? 'Last 7 days' : 'Selected day'
+    this.scope.options[0].textContent = multiDay ? 'Selected range' : 'Selected day'
   }
 
   setLoading(loading: boolean) {
@@ -167,9 +141,6 @@ export class History {
   private syncControls() {
     const f = this.filters
     this.scope.value = f.scope
-    this.from.value = f.from
-    this.to.value = f.to
-    this.rangeBox.hidden = f.scope !== 'range'
     replace(
       this.chip,
       f.domain
@@ -208,7 +179,7 @@ export class History {
     const rows = this.visible()
     const total = rows.reduce((t, r) => t + (r.end - r.start), 0)
     const f = this.filters
-    const where = f.scope === 'day' ? (this.multiDay ? 'in the last 7 days' : 'for the selected day') : f.scope === 'range' ? 'in the selected range' : 'in all history'
+    const where = f.scope === 'day' ? (this.multiDay ? 'in the selected range' : 'for the selected day') : 'in all history'
     const narrowed = f.search || f.domain
     this.sub.textContent = rows.length === 0
       ? 'No detailed logs'

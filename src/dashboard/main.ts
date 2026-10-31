@@ -1,7 +1,8 @@
 import {sendMessage} from '../background/messages'
 import {DEFAULT_SETTINGS} from '../shared/settings'
 import {clipSegmentsTo, computeStats, groupSegments, percentChange} from '../shared/stats'
-import {addDays, dayKey, startOfDay, parseDayKey} from '../shared/time'
+import {lastDays, rangeLength, shiftRange} from '../shared/range'
+import {addDays, dayKey, startOfDay} from '../shared/time'
 import type {Segment, Settings} from '../shared/types'
 import {assignColors, initColors} from './colors'
 import {Data} from './data'
@@ -9,7 +10,7 @@ import {$, debounce} from './dom'
 import {renderBreakdown} from './components/breakdown'
 import {renderDetails} from './components/details'
 import {openExportDialog, openSettingsDialog} from './components/dialogs'
-import {Header, type Mode} from './components/header'
+import {Header} from './components/header'
 import {History} from './components/history'
 import {renderSummary, type SummaryContext} from './components/summary'
 import {Timeline} from './components/timeline'
@@ -17,11 +18,11 @@ import {renderWeek} from './components/week'
 
 const data = new Data()
 let settings: Settings = DEFAULT_SETTINGS
-let day = startOfDay(Date.now())
-/** Segments of the selected period: one day, or the week ending on `day`. */
+/** Selected days, inclusive, local midnights. A single day has `from === to`. */
+let from = startOfDay(Date.now())
+let to = from
+/** Segments of the selected period. */
 let periodSegs: Segment[] = []
-let mode: Mode = 'day'
-const WEEK_DAYS = 7
 let domainFilter: string | null = null
 let selected: Segment | null = null
 let firstDay: number | null = null
@@ -44,18 +45,15 @@ function effectiveTheme(): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-const periodStart = () => (mode === 'week' ? addDays(day, -(WEEK_DAYS - 1)) : day)
+const isRange = () => from !== to
 
 const header = new Header({
-  onPrev: () => goTo(addDays(day, mode === 'week' ? -WEEK_DAYS : -1)),
-  onNext: () => goTo(addDays(day, mode === 'week' ? WEEK_DAYS : 1)),
-  onToday: () => setMode('day', startOfDay(Date.now())),
-  onYesterday: () => setMode('day', addDays(startOfDay(Date.now()), -1)),
-  onWeek: () => setMode('week', startOfDay(Date.now())),
-  onPickDay: (key) => {
-    const d = parseDayKey(key)
-    if (d !== null) goTo(d)
-  },
+  onPrev: () => goTo(...shiftRange(from, to, -1, startOfDay(Date.now()))),
+  onNext: () => goTo(...shiftRange(from, to, 1, startOfDay(Date.now()))),
+  onToday: () => goTo(startOfDay(Date.now()), startOfDay(Date.now())),
+  onYesterday: () => goTo(addDays(startOfDay(Date.now()), -1), addDays(startOfDay(Date.now()), -1)),
+  onWeek: () => goTo(...lastDays(7, startOfDay(Date.now()))),
+  onRange: (f, t) => goTo(f, t),
   onTheme: () => {
     const next = effectiveTheme() === 'dark' ? 'light' : 'dark'
     settings = {...settings, theme: next}
@@ -63,7 +61,7 @@ const header = new Header({
     render()
     void data.saveSettings(settings)
   },
-  onExport: () => openExportDialog(data, day),
+  onExport: () => openExportDialog(data, from, to),
   onSettings: () =>
     openSettingsDialog(data, settings, {
       onSaved: (s) => {
@@ -82,23 +80,19 @@ $('#header').replaceWith(header.el)
 const timeline = new Timeline((seg) => select(seg))
 $('#timeline').append(timeline.el)
 
-const history = new History(day, {
+const history = new History({
   onReload: () => void loadHistory(),
   onSelect: (seg) => select(seg),
   onDomain: (d) => setDomain(d)
 })
 $('#history').append(history.el)
 
-function goTo(target: number) {
+function goTo(nextFrom: number, nextTo: number) {
   const today = startOfDay(Date.now())
-  day = Math.min(startOfDay(target), today)
+  to = Math.min(startOfDay(nextTo), today)
+  from = Math.min(startOfDay(nextFrom), to)
   selected = null
   void refresh()
-}
-
-function setMode(next: Mode, target: number) {
-  mode = next
-  goTo(target)
 }
 
 function setDomain(d: string | null) {
@@ -108,10 +102,9 @@ function setDomain(d: string | null) {
 }
 
 function select(seg: Segment | null) {
-  // A visit is shown on the 24-hour timeline, so leave the week view for its day.
-  if (seg && (mode === 'week' || startOfDay(seg.start) !== day)) {
-    mode = 'day'
-    day = startOfDay(seg.start)
+  // A visit is shown on the 24-hour timeline, so leave the range view for its day.
+  if (seg && (isRange() || startOfDay(seg.start) !== from)) {
+    from = to = startOfDay(seg.start)
     selected = seg
     void refresh()
     return
@@ -124,29 +117,28 @@ function select(seg: Segment | null) {
 function render() {
   const today = startOfDay(Date.now())
   const stats = computeStats(periodSegs)
-  const week = mode === 'week'
-  header.update({mode, day, today, minDay: firstDay, theme: effectiveTheme(), weekDays: WEEK_DAYS})
+  const week = isRange()
+  header.update({from, to, today, minDay: firstDay, theme: effectiveTheme()})
   renderSummary($('#summary'), stats, {...summaryCtx, change: percentChange(stats.totalMs, summaryCtx.prevTotalMs ?? 0)})
 
   $('#h-timeline').textContent = week ? 'Daily totals' : '24-hour timeline'
   $('#timeline').hidden = week
   $('#week').hidden = !week
   if (week) {
-    const from = periodStart()
     const byDay = new Map<string, Segment[]>()
     for (const seg of periodSegs) byDay.set(seg.day, [...(byDay.get(seg.day) ?? []), seg])
-    const totals = Array.from({length: WEEK_DAYS}, (_, i) => {
+    const totals = Array.from({length: rangeLength(from, to)}, (_, i) => {
       const d = addDays(from, i)
       return {day: d, totalMs: computeStats(byDay.get(dayKey(d)) ?? []).totalMs}
     })
-    renderWeek($('#week'), totals, today, (d) => setMode('day', d))
+    renderWeek($('#week'), totals, today, (d) => goTo(d, d))
     renderDetails($('#details'), null, settings.hour12, {onFilter: () => {}, onClose: () => {}})
   } else {
     timeline.update({
       segments: periodSegs,
-      dayStart: day,
-      dayEnd: addDays(day, 1),
-      now: day === today ? Date.now() : null,
+      dayStart: from,
+      dayEnd: addDays(from, 1),
+      now: from === today ? Date.now() : null,
       hour12: settings.hour12,
       highlightDomain: domainFilter,
       selected
@@ -173,7 +165,7 @@ async function loadHistory() {
   }
   history.setLoading(true)
   try {
-    const raw = f.scope === 'all' ? await data.all() : await data.range(history.range().from, history.range().to)
+    const raw = await data.all()
     const segs = groupSegments(raw, settings.groupSubdomains)
     if (token !== loadToken) return // a newer request superseded this one
     await assignColors(computeStats(segs).breakdown.map((d) => d.domain))
@@ -187,22 +179,23 @@ async function loadHistory() {
 async function refresh() {
   try {
     showError(null)
-    const from = periodStart()
-    const len = mode === 'week' ? WEEK_DAYS : 1
+    const len = rangeLength(from, to)
     const prevFrom = addDays(from, -len)
-    const load = (start: number) => (mode === 'week' ? data.range(start, addDays(start, len - 1)) : data.day(start))
-    const [s, rawPeriod, first, rawPrev] = await Promise.all([data.settings(), load(from), data.firstStart(), load(prevFrom)])
+    const load = (a: number, b: number) => (a === b ? data.day(a) : data.range(a, b))
+    const [from0, to0] = [from, to] // the selection can change while loading
+    const [s, rawPeriod, first, rawPrev] = await Promise.all([data.settings(), load(from0, to0), data.firstStart(), load(prevFrom, addDays(from0, -1))])
     settings = s
     firstDay = first
     periodSegs = groupSegments(rawPeriod, settings.groupSubdomains)
     // The current period is only partly over, so compare it with the one before it up to the same point.
-    const inProgress = day === startOfDay(Date.now())
+    if (from0 !== from || to0 !== to) return // superseded by a newer selection
+    const inProgress = to === startOfDay(Date.now())
     const prevSegs = inProgress ? clipSegmentsTo(rawPrev, prevFrom + (Date.now() - from)) : rawPrev
     const prevTotal = computeStats(prevSegs).totalMs
     summaryCtx = {
       prevTotalMs: prevTotal > 0 ? prevTotal : null,
       change: null,
-      prevLabel: mode === 'week' ? 'previous 7 days' : inProgress ? 'yesterday' : 'previous day'
+      prevLabel: len === 1 ? (inProgress ? 'yesterday' : 'previous day') : `previous ${len} days`
     }
     await assignColors(computeStats(periodSegs).breakdown.map((d) => d.domain))
     applyTheme()
@@ -217,8 +210,8 @@ async function refresh() {
 data.onChange(debounce(() => void refresh(), 300))
 setInterval(() => {
   const today = startOfDay(Date.now())
-  if (day === today) timeline.setNow(Date.now())
-  else if (day === addDays(today, -1) && Date.now() - today < 60_000) void refresh() // midnight passed
+  if (!isRange() && from === today) timeline.setNow(Date.now())
+  else if (from === addDays(today, -1) && to === from && Date.now() - today < 60_000) void refresh() // midnight passed
 }, 30_000)
 
 void initColors().then(refresh)

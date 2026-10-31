@@ -27,10 +27,13 @@ function modal(title: string, ...body: Array<Node | null>) {
 
 // ---------------------------------------------------------------- export
 
-export function openExportDialog(data: Data, day: number) {
-  let mode: 'day' | 'range' | 'all' = 'day'
+/** Opens with the header's selection: a single day, or its range preselected. */
+export function openExportDialog(data: Data, rangeFrom: number, rangeTo: number) {
+  const day = rangeTo
+  const multi = rangeFrom !== rangeTo
+  let mode: 'day' | 'range' | 'all' = multi ? 'range' : 'day'
   const today = startOfDay(Date.now())
-  const from = h('input', {type: 'date', class: 'input', value: dayKey(addDays(day, -6)), 'aria-label': 'From date'})
+  const from = h('input', {type: 'date', class: 'input', value: dayKey(multi ? rangeFrom : addDays(day, -6)), 'aria-label': 'From date'})
   const to = h('input', {type: 'date', class: 'input', value: dayKey(day), 'aria-label': 'To date'})
   const status = h('p', {class: 'note', 'aria-live': 'polite'})
   const go = h('button', {class: 'btn btn-primary', type: 'button'}, 'Download CSV')
