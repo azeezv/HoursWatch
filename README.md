@@ -17,12 +17,19 @@ A Chrome extension that tracks the websites you actively look at and shows them 
 
 </div>
 
-<div style="display: flex; gap: 20px;">
-  <img src="./screenshots/dark.png" style="margin-bottom:10px;" alt="" width="48%" />
-  <img src="./screenshots/weekly.png" style="margin-bottom:10px;" alt="" width="48%" />
-</div>
-
 ---
+<p align="center">
+  <img src="./screenshots/banner.png" alt="HoursWatch" style="margin-bottom:10px;" alt="" width="75%" />
+</p>
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/hourswatch/gdefppecgcgglgjioapijkanckicjjck">
+      <picture>
+        <source srcset="https://i.imgur.com/XBIE9pk.png" media="(prefers-color-scheme: dark)">
+        <img height="58" src="https://i.imgur.com/oGxig2F.png" alt="Chrome Web Store">
+      </picture>
+  </a>
+</p>
+
 
 ## Features
 
@@ -34,6 +41,15 @@ A Chrome extension that tracks the websites you actively look at and shows them 
 - **Toolbar popup**: current status, today's total, top sites, and a Pause/Resume button.
 - **CSV export** for a day, a range, or all history.
 - **Light and dark themes**, 12/24-hour time, never-track list.
+
+## Screenshots
+
+<div style="display: flex; gap: 20px;">
+  <img src="./screenshots/weekly.png" style="margin-bottom:10px;" alt="" width="30%" />
+  <img src="./screenshots/dark.png" style="margin-bottom:10px;" alt="" width="30%" />
+  <img src="./screenshots/light.png" style="margin-bottom:10px;" alt="" width="30%" />
+</div>
+
 
 ## Privacy
 
